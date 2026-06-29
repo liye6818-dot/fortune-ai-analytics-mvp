@@ -781,15 +781,22 @@ label {
 @media (max-width: 640px) {
   body {
     background: #fff;
+    overflow-x: hidden;
   }
 
   .app-header {
     position: static;
-    padding: 14px;
+    padding: 12px;
+    gap: 10px;
   }
 
   .app-header h1 {
-    font-size: 20px;
+    font-size: 18px;
+  }
+
+  .app-header p,
+  .privacy-badge {
+    display: none;
   }
 
   .header-actions,
@@ -808,18 +815,92 @@ label {
   }
 
   .layout {
-    padding: 10px;
-    gap: 10px;
+    padding: 8px;
+    gap: 8px;
   }
 
   .panel {
     border-radius: 8px;
-    padding: 12px;
+    padding: 10px;
+  }
+
+  .panel-title {
+    align-items: flex-start;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+
+  .panel-title h2 {
+    font-size: 16px;
+  }
+
+  .panel-title h3 {
+    font-size: 14px;
+  }
+
+  .panel-title span,
+  .summary-line {
+    font-size: 12px;
   }
 
   textarea {
-    min-height: 190px;
+    min-height: 120px;
     font-size: 16px;
+  }
+
+  button,
+  .file-button,
+  input,
+  select {
+    min-height: 34px;
+  }
+
+  button,
+  .file-button {
+    padding: 7px 9px;
+  }
+
+  .table-wrap {
+    max-height: 48vh;
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .order-entry .table-wrap {
+    max-height: 36vh;
+  }
+
+  .risk-table {
+    max-height: 54vh;
+  }
+
+  .report-table,
+  .settlement-table {
+    max-height: 30vh;
+  }
+
+  table {
+    min-width: 760px;
+    font-size: 13px;
+  }
+
+  .risk-table table {
+    min-width: 600px;
+  }
+
+  .report-table table {
+    min-width: 420px;
+  }
+
+  th,
+  td {
+    padding: 7px 8px;
+  }
+
+  th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
   }
 
   .settings-tools summary {
@@ -827,16 +908,64 @@ label {
     flex-direction: column;
   }
 
-  .odds-grid,
-  .stats-grid,
-  .risk-extremes,
-  .zodiac-grid {
+  .odds-grid {
     grid-template-columns: 1fr;
+  }
+
+  .stats-grid,
+  .risk-extremes {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .stats-grid div,
+  .risk-extremes div,
+  .zodiac-grid div,
+  .mini-list div {
+    padding: 8px;
+  }
+
+  .stats-grid b,
+  .risk-extremes b {
+    font-size: 18px;
+  }
+
+  .zodiac-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .zodiac-risk-card {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .zodiac-risk-card span {
+    font-size: 12px;
+  }
+
+  .zodiac-risk-card b {
+    font-size: 15px;
   }
 
   .customer-create-row {
     display: grid;
     grid-template-columns: 1fr;
+  }
+
+  .help-content {
+    max-height: 160px;
+    overflow: auto;
+  }
+
+  #reportText {
+    min-height: 96px;
+    font-size: 14px;
+  }
+
+  .parsed-targets {
+    min-width: 220px;
   }
 
   .license-card {
