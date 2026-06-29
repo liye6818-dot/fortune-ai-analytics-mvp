@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>收单助手发码后台</title>
+    <style>
+      :root {
+        --bg: #f4f6f8;
+        --text: #17212b;
+        --muted: #657487;
+        --line: #d8dee6;
+        --primary: #5443e8;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        padding: 20px;
+        background: var(--bg);
+        color: var(--text);
+        font-family: "Microsoft YaHei", "Segoe UI", Arial, sans-serif;
+      }
+      main {
+        width: min(100%, 520px);
+        padding: 24px;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: #fff;
+        box-shadow: 0 14px 34px rgba(15, 23, 42, 0.12);
+      }
+      h1 { margin: 0 0 8px; font-size: 24px; }
+      p { margin: 0 0 22px; color: var(--muted); }
+      label {
+        display: grid;
+        gap: 8px;
+        margin-bottom: 14px;
+        color: var(--muted);
+        font-size: 14px;
+        font-weight: 700;
+      }
+      input, select, textarea, button {
+        width: 100%;
+        min-height: 44px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 8px 10px;
+        font: inherit;
+      }
+      button {
+        border-color: var(--primary);
+        background: var(--primary);
+        color: #fff;
+        cursor: pointer;
+        font-weight: 800;
+      }
+      textarea {
+        min-height: 92px;
+        resize: vertical;
+        font-size: 18px;
+        font-weight: 800;
+      }
+      .row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+      }
+      .hint {
+        margin-top: 14px;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.6;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>发码后台</h1>
+      <p>输入客户发来的设备识别码，选择有效期，生成激活码。</p>
+      <label>设备识别码
+        <input id="deviceInput" placeholder="例如 DEV-XXXXXXXX-XXXXXXXX" />
+      </label>
+      <div class="row">
+        <label>有效期
+          <select id="daysInput">
+            <option value="180">180 天</option>
+            <option value="365">365 天</option>
+          </select>
+        </label>
+        <label>到期日期
+          <input id="expiresOutput" readonly />
+        </label>
+      </div>
+      <button id="generateBtn" type="button">生成激活码</button>
+      <label style="margin-top:14px;">激活码
+        <textarea id="licenseOutput" readonly></textarea>
+      </label>
+      <button id="copyBtn" type="button">复制激活码</button>
+      <div class="hint">MVP 版本为本地发码演示。正式上线时，发码、续费、解绑设备、封禁密钥应放到服务器后台。</div>
+    </main>
+
+    <script>
+      function simpleHash(text) {
+        let hash = 2166136261;
+        for (let i = 0; i < text.length; i += 1) {
+          hash ^= text.charCodeAt(i);
+          hash = Math.imul(hash, 16777619);
+        }
+        return (hash >>> 0).toString(16).toUpperCase().padStart(8, "0");
+      }
+      function licenseSignature(device, expiresAt) {
+        return simpleHash(`FORTUNE|${device}|${expiresAt}|PRIVATE-MVP-2026`);
+      }
+      function buildLicenseKey(device, days) {
+        const expiresAt = new Date(Date.now() + Number(days) * 86400000).toISOString().slice(0, 10).replace(/-/g, "");
+        return {
+          key: `FA-${expiresAt}-${licenseSignature(device, expiresAt)}`,
+          expiresAt
+        };
+      }
+      function formatDate(compact) {
+        return `${compact.slice(0, 4)}-${compact.slice(4, 6)}-${compact.slice(6, 8)}`;
+      }
+      function generate() {
+        const device = document.getElementById("deviceInput").value.trim().toUpperCase();
+        if (!device) {
+          alert("请先输入设备识别码");
+          return;
+        }
+        const result = buildLicenseKey(device, document.getElementById("daysInput").value);
+        document.getElementById("licenseOutput").value = result.key;
+        document.getElementById("expiresOutput").value = formatDate(result.expiresAt);
+      }
+      document.getElementById("generateBtn").onclick = generate;
+      document.getElementById("copyBtn").onclick = async () => {
+        const value = document.getElementById("licenseOutput").value;
+        if (!value) return;
+        await navigator.clipboard?.writeText(value).catch(() => {});
+      };
+    </script>
+  </body>
+</html>
