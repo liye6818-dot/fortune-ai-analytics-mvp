@@ -779,6 +779,10 @@ label {
 }
 
 @media (max-width: 640px) {
+  html {
+    overflow-x: hidden;
+  }
+
   body {
     background: #fff;
     overflow-x: hidden;
