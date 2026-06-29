@@ -912,6 +912,16 @@ label {
     grid-template-columns: 1fr;
   }
 
+  .odds-setting-row {
+    grid-template-columns: 64px minmax(0, 1fr) minmax(0, 1fr);
+    gap: 6px;
+  }
+
+  .odds-setting-row input {
+    width: 100%;
+    min-width: 0;
+  }
+
   .stats-grid,
   .risk-extremes {
     grid-template-columns: repeat(2, minmax(0, 1fr));
