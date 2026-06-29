@@ -1,0 +1,846 @@
+:root {
+  --bg: #f4f6f8;
+  --panel: #ffffff;
+  --text: #17212b;
+  --muted: #657487;
+  --line: #d8dee6;
+  --primary: #1668dc;
+  --danger: #c62828;
+  --ok: #137333;
+  --warn: #b26a00;
+  --violet: #5443e8;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Microsoft YaHei", "Segoe UI", Arial, sans-serif;
+}
+
+body.locked {
+  overflow: hidden;
+}
+
+.license-gate {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: #f5f6fa;
+  overflow: auto;
+}
+
+.license-gate[hidden] {
+  display: none;
+}
+
+.license-hero {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 34vh;
+  min-height: 220px;
+  background: var(--violet);
+  border-bottom-left-radius: 56px;
+  border-bottom-right-radius: 56px;
+}
+
+.license-hero::after {
+  content: "";
+  position: absolute;
+  right: 12%;
+  top: 28%;
+  width: 130px;
+  height: 110px;
+  opacity: 0.12;
+  background: #fff;
+  clip-path: polygon(50% 0, 100% 45%, 70% 45%, 50% 100%, 30% 45%, 0 45%);
+}
+
+.license-card {
+  position: relative;
+  width: min(100%, 430px);
+  margin-top: 64px;
+  border-radius: 24px;
+  padding: 34px 28px 24px;
+  background: #fff;
+  box-shadow: 0 20px 46px rgba(15, 23, 42, 0.18);
+}
+
+.license-icon {
+  display: grid;
+  place-items: center;
+  width: 70px;
+  height: 70px;
+  margin: -4px auto 18px;
+  border-radius: 18px;
+  background: var(--violet);
+  color: #fff;
+  font-size: 30px;
+  font-weight: 800;
+  box-shadow: 0 12px 24px rgba(84, 67, 232, 0.28);
+}
+
+.license-card h1 {
+  margin: 0;
+  text-align: center;
+  font-size: 28px;
+}
+
+.license-card p {
+  margin: 10px 0 24px;
+  text-align: center;
+  color: #98a1ad;
+}
+
+.license-card label {
+  display: grid;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.license-card input[type="text"],
+#licenseInput {
+  width: 100%;
+  min-height: 56px;
+  border-radius: 12px;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.license-remember {
+  display: flex !important;
+  grid-template-columns: none;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px !important;
+  margin: 14px 0 18px;
+  font-weight: 500 !important;
+}
+
+.license-remember input {
+  width: 18px;
+  min-height: 18px;
+}
+
+#activateBtn {
+  width: 100%;
+  min-height: 56px;
+  border-radius: 12px;
+  background: var(--violet);
+  border-color: var(--violet);
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.license-message {
+  min-height: 22px;
+  margin-top: 12px;
+  text-align: center;
+  color: var(--warn);
+}
+
+.device-code {
+  margin-top: 16px;
+  text-align: center;
+  color: #a5adba;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.device-code b {
+  display: block;
+  margin-top: 6px;
+  color: #7d8795;
+  font-weight: 600;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button {
+  border: 1px solid var(--primary);
+  background: var(--primary);
+  color: #fff;
+  border-radius: 6px;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+button:hover {
+  filter: brightness(0.96);
+}
+
+.file-button {
+  border: 1px solid var(--primary);
+  background: var(--primary);
+  color: #fff;
+  border-radius: 6px;
+  padding: 8px 12px;
+  cursor: pointer;
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.file-button:hover {
+  filter: brightness(0.96);
+}
+
+#imageOcrInput {
+  display: none;
+}
+
+.toolbar-status {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+button.danger {
+  background: var(--danger);
+  border-color: var(--danger);
+}
+
+button.plain {
+  background: transparent;
+  border-color: transparent;
+  color: var(--primary);
+  padding: 4px 6px;
+}
+
+button.danger-text {
+  color: var(--danger);
+}
+
+input,
+select,
+textarea {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--text);
+}
+
+textarea {
+  width: 100%;
+  min-height: 160px;
+  resize: vertical;
+  padding: 12px;
+  line-height: 1.6;
+}
+
+.zodiac-risk-box {
+  margin-top: 10px;
+}
+
+input,
+select {
+  min-height: 36px;
+  padding: 0 10px;
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 24px;
+  background: #ffffff;
+  border-bottom: 1px solid var(--line);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.app-header h1,
+.panel h2,
+.panel h3 {
+  margin: 0;
+  letter-spacing: 0;
+}
+
+.app-header h1 {
+  font-size: 22px;
+}
+
+.app-header p {
+  margin: 4px 0 0;
+  color: var(--muted);
+}
+
+.privacy-badge {
+  display: inline-flex;
+  margin-top: 8px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #eef7f0;
+  color: var(--ok);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.header-actions,
+.toolbar,
+.risk-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.header-actions input {
+  width: 110px;
+}
+
+#customerNameInput {
+  width: 140px;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(420px, 1.1fr) minmax(360px, 0.9fr);
+  gap: 16px;
+  padding: 16px;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 16px;
+  min-width: 0;
+}
+
+.order-entry,
+.orders-panel,
+.customer-panel {
+  grid-column: 1 / -1;
+}
+
+.panel-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.panel-title.compact {
+  margin-top: 14px;
+  margin-bottom: 8px;
+}
+
+.panel-title h2 {
+  font-size: 18px;
+}
+
+.panel-title h3 {
+  font-size: 15px;
+}
+
+.panel-title span,
+.summary-line {
+  color: var(--muted);
+}
+
+.table-wrap {
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  margin-top: 12px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 920px;
+}
+
+th,
+td {
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  white-space: nowrap;
+}
+
+th {
+  background: #f8fafc;
+  color: #334155;
+  font-weight: 600;
+}
+
+td small {
+  color: var(--muted);
+}
+
+.targets-cell {
+  min-width: 340px;
+  white-space: normal;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.customer-settings-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.customer-settings-head label,
+.odds-setting-row label {
+  display: grid;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.customer-settings-head select,
+.customer-settings-head input {
+  min-width: 120px;
+}
+
+.settings-tools {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fbfcfd;
+  padding: 8px 10px;
+}
+
+.settings-tools summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  color: var(--text);
+  font-weight: 700;
+}
+
+.settings-tools summary span {
+  font-size: 20px;
+}
+
+.settings-tools summary small {
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.customer-settings-body {
+  margin-top: 12px;
+}
+
+.odds-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 10px;
+}
+
+.entry-folders {
+  margin-bottom: 10px;
+}
+
+.entry-tools {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px 10px;
+  background: #fbfcfd;
+}
+
+.entry-tools summary {
+  cursor: pointer;
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.entry-tools-grid {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.6fr) minmax(260px, 1fr);
+  gap: 14px;
+  margin-top: 10px;
+}
+
+.entry-tools-grid h3 {
+  margin: 0 0 8px;
+  font-size: 14px;
+}
+
+.customer-create-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.help-content {
+  margin-top: 8px;
+  max-width: 720px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.help-content p {
+  margin: 0 0 8px;
+}
+
+.help-content p:last-child {
+  margin-bottom: 0;
+}
+
+.odds-setting-row {
+  display: grid;
+  grid-template-columns: 70px minmax(80px, 1fr) minmax(80px, 1fr);
+  gap: 8px;
+  align-items: end;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px;
+  background: #fbfcfd;
+}
+
+.odds-setting-row b {
+  align-self: center;
+}
+
+.stats-grid div,
+.risk-extremes div,
+.zodiac-grid div,
+.mini-list div {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 10px;
+  background: #fbfcfd;
+}
+
+.stats-grid b,
+.risk-extremes b {
+  display: block;
+  font-size: 22px;
+  margin-bottom: 4px;
+}
+
+.stats-grid span,
+.risk-extremes span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.mini-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: 120px 160px 1fr;
+  gap: 10px;
+  align-items: end;
+}
+
+label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.summary-line {
+  margin-top: 12px;
+  padding: 10px;
+  background: #f8fafc;
+  border-radius: 6px;
+}
+
+.risk-controls {
+  margin-bottom: 12px;
+}
+
+.smart-limit-btn {
+  min-height: 38px;
+}
+
+#smartRiskLimitText {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.risk-extremes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+#maxProfit {
+  color: var(--ok);
+}
+
+#maxLoss {
+  color: var(--danger);
+}
+
+.risk-table table {
+  min-width: 620px;
+}
+
+.risk-table input {
+  width: 86px;
+}
+
+.order-edit-number {
+  width: 86px;
+}
+
+.risk-workspace {
+  display: grid;
+  grid-template-columns: minmax(620px, 1fr) minmax(260px, 340px);
+  gap: 12px;
+  align-items: start;
+}
+
+.report-panel {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 10px;
+  background: #ffffff;
+}
+
+.report-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+#reportText {
+  min-height: 140px;
+  font-size: 16px;
+  line-height: 1.5;
+  resize: vertical;
+  background: #fff7ed;
+  color: var(--danger);
+}
+
+.risk-over {
+  background: #fff7ed;
+}
+
+.muted-cell {
+  color: var(--muted);
+  text-align: center;
+}
+
+.source-cell {
+  color: var(--muted);
+  font-size: 12px;
+  max-width: 220px;
+  white-space: normal;
+  word-break: break-word;
+}
+
+.source-cell summary {
+  cursor: pointer;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.source-cell details div {
+  margin-top: 4px;
+}
+
+.report-table {
+  margin-top: 8px;
+  margin-bottom: 12px;
+}
+
+.settlement-customer-cell {
+  min-width: 180px;
+  white-space: normal;
+}
+
+.settlement-customer-cell summary {
+  cursor: pointer;
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.settlement-detail {
+  margin-top: 8px;
+  max-width: 520px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.settlement-formula {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.settlement-winners {
+  margin-top: 6px;
+  color: var(--muted);
+}
+
+.settlement-winners div {
+  padding-top: 3px;
+}
+
+.report-table table {
+  min-width: 0;
+}
+
+.parsed-edit {
+  width: 100%;
+  min-width: 74px;
+}
+
+.parsed-targets {
+  min-width: 320px;
+  min-height: 64px;
+  resize: vertical;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.parsed-number {
+  min-width: 82px;
+}
+
+.zodiac-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.zodiac-risk-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.zodiac-risk-card span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.zodiac-risk-card b {
+  font-size: 18px;
+}
+
+.ok {
+  color: var(--ok);
+}
+
+.bad {
+  color: var(--danger);
+}
+
+.warn {
+  color: var(--warn);
+}
+
+@media (max-width: 980px) {
+  .layout,
+  .form-grid,
+  .risk-workspace,
+  .entry-tools-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .app-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 640px) {
+  body {
+    background: #fff;
+  }
+
+  .app-header {
+    position: static;
+    padding: 14px;
+  }
+
+  .app-header h1 {
+    font-size: 20px;
+  }
+
+  .header-actions,
+  .toolbar,
+  .customer-settings-head,
+  .risk-controls {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    width: 100%;
+  }
+
+  .header-actions > *,
+  .toolbar > *,
+  .risk-controls > * {
+    width: 100%;
+  }
+
+  .layout {
+    padding: 10px;
+    gap: 10px;
+  }
+
+  .panel {
+    border-radius: 8px;
+    padding: 12px;
+  }
+
+  textarea {
+    min-height: 190px;
+    font-size: 16px;
+  }
+
+  .settings-tools summary {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .odds-grid,
+  .stats-grid,
+  .risk-extremes,
+  .zodiac-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .customer-create-row {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .license-card {
+    padding: 30px 22px 22px;
+    border-radius: 22px;
+  }
+}
