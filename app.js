@@ -822,6 +822,29 @@ function parseInlineNumberGroups(line, fallbackRegion) {
   return groups;
 }
 
+function parseNumberSlashAmountGroups(line, fallbackRegion) {
+  const normalized = normalizeText(line);
+  const region = detectRegion(normalized, fallbackRegion);
+  const type = detectType(normalized);
+  const amount = "([0-9]+(?:\\.[0-9]+)?|[一二两三四五六七八九十百]+)";
+  const pairPattern = new RegExp(`\\b([0-4]?\\d)\\b\\s*[=＝/／?？]\\s*${amount}\\s*(?:元|米|块|斤)?`, "g");
+  const groups = [];
+  let match;
+  while ((match = pairPattern.exec(normalized)) !== null) {
+    const target = pad(match[1]);
+    const parsedAmount = chineseAmountToNumber(match[2]) || 0;
+    if (!parsedAmount) continue;
+    groups.push(makeOrder({
+      raw: match[0].trim(),
+      region,
+      type,
+      targets: [target],
+      amount: parsedAmount
+    }));
+  }
+  return groups.length >= 2 ? groups : [];
+}
+
 function isEditableDeferredLine(line) {
   return /连肖|[二三四五]连/.test(String(line || "")) && zodiacMatches(line).length > 0;
 }
@@ -1244,6 +1267,13 @@ function parseInputText(text, fallbackRegion) {
     if (zodiacEqualsGroups.length) {
       pendingNumberLines = [];
       result.push(...zodiacEqualsGroups);
+      continue;
+    }
+
+    const numberSlashAmountGroups = parseNumberSlashAmountGroups(line, fallbackRegion);
+    if (numberSlashAmountGroups.length) {
+      pendingNumberLines = [];
+      result.push(...numberSlashAmountGroups);
       continue;
     }
 
@@ -2149,6 +2179,14 @@ function exportData() {
   URL.revokeObjectURL(url);
 }
 
+function openEntryTools() {
+  const tools = $("entryTools");
+  if (tools) {
+    tools.open = true;
+    tools.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+}
+
 window.FortuneApp = {
   parseOrders,
   recognizeImageOrders,
@@ -2164,6 +2202,7 @@ window.FortuneApp = {
   clearSettlement,
   clearOrders,
   exportData,
+  openEntryTools,
   buildLicenseKey,
   deviceCode
 };
@@ -2177,7 +2216,7 @@ $("fetchLatestDrawBtn").onclick = fetchLatestDraw;
 $("settleBtn").onclick = settleOrders;
 $("clearSettlementBtn").onclick = clearSettlement;
 $("clearOrdersBtn").onclick = clearOrders;
-$("exportDataBtn").onclick = exportData;
+$("openEntryToolsBtn").onclick = openEntryTools;
 $("orderInput").addEventListener("input", scheduleParseOrders);
 $("orderInput").addEventListener("paste", () => setTimeout(parseOrders, 0));
 $("defaultRegion").addEventListener("change", parseOrders);
