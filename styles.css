@@ -343,6 +343,42 @@ select {
   width: 110px;
 }
 
+.blessing-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 14px 16px 0;
+  padding: 10px 12px;
+  border: 1px solid #f1d4a8;
+  border-radius: 10px;
+  background: linear-gradient(90deg, #fff8ec, #fffdf8);
+  box-shadow: 0 2px 8px rgba(150, 91, 18, 0.08);
+  overflow: hidden;
+}
+
+.blessing-card img {
+  width: 118px;
+  height: 66px;
+  border-radius: 8px;
+  object-fit: cover;
+  object-position: center;
+  flex: 0 0 auto;
+}
+
+.blessing-card b {
+  display: block;
+  color: #8a3d16;
+  font-size: 20px;
+  line-height: 1.2;
+}
+
+.blessing-card span {
+  display: block;
+  margin-top: 4px;
+  color: #7c5a32;
+  font-size: 13px;
+}
+
 .settings-dialog {
   width: min(940px, calc(100vw - 24px));
   max-height: min(86vh, 820px);
@@ -915,6 +951,29 @@ label {
   .app-header p,
   .privacy-badge {
     display: none;
+  }
+
+  .blessing-card {
+    gap: 8px;
+    margin: 8px 8px 0;
+    padding: 7px 8px;
+    border-radius: 8px;
+  }
+
+  .blessing-card img {
+    width: 78px;
+    height: 48px;
+    border-radius: 7px;
+  }
+
+  .blessing-card b {
+    font-size: 16px;
+  }
+
+  .blessing-card span {
+    margin-top: 2px;
+    font-size: 12px;
+    line-height: 1.25;
   }
 
   .toolbar,
