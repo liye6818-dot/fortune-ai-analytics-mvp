@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Fortune AI Analytics MVP</title>
-    <link rel="stylesheet" href="./styles.css?v=20260630_order_detail_compact" />
+    <link rel="stylesheet" href="./styles.css?v=20260630_slash_amount_fix" />
   </head>
   <body>
     <section id="licenseGate" class="license-gate" hidden>
@@ -37,7 +37,7 @@
       </div>
       <div class="header-actions">
         <button id="openCustomerDialogBtn" type="button" onclick="document.getElementById('customerDialog').showModal()">客户管理</button>
-        <button id="exportDataBtn" type="button" onclick="FortuneApp.exportData()">导出设置</button>
+        <button id="openEntryToolsBtn" type="button" onclick="FortuneApp.openEntryTools()">辅助功能</button>
         <button id="clearOrdersBtn" class="danger" type="button" onclick="FortuneApp.clearOrders()">删除全部注单</button>
       </div>
     </header>
@@ -83,7 +83,7 @@
           <span id="parseStatus">等待输入</span>
         </div>
         <div class="entry-folders">
-          <details class="entry-tools">
+          <details id="entryTools" class="entry-tools">
             <summary>辅助功能</summary>
             <div class="entry-tools-grid">
               <div>
@@ -302,6 +302,6 @@
       </section>
     </main>
 
-    <script src="./app.js?v=20260628_hk_draw_api3"></script>
+    <script src="./app.js?v=20260630_slash_amount_fix"></script>
   </body>
 </html>
