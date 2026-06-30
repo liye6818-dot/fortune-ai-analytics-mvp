@@ -1560,6 +1560,7 @@ label {
     inset: 0;
     z-index: 60;
     background: rgba(15, 23, 42, 0.18);
+    pointer-events: none;
   }
 
   body.mobile-settlement-mode .risk-panel > .panel-title,
