@@ -394,6 +394,17 @@ select {
   background: rgba(15, 23, 42, 0.42);
 }
 
+.settings-dialog.fallback-open {
+  position: fixed;
+  inset: 12px;
+  z-index: 120;
+  display: block;
+  width: auto;
+  max-width: none;
+  max-height: calc(100vh - 24px);
+  overflow: auto;
+}
+
 .dialog-head {
   position: sticky;
   top: 0;
