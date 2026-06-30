@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Fortune AI Analytics MVP</title>
-    <link rel="stylesheet" href="./styles.css?v=20260626_keep_duplicate_numbers" />
+    <link rel="stylesheet" href="./styles.css?v=20260630_ui_polish" />
   </head>
   <body>
     <section id="licenseGate" class="license-gate" hidden>
@@ -36,18 +36,34 @@
         <span class="privacy-badge">隐私模式：注单仅本机浏览器保存</span>
       </div>
       <div class="header-actions">
+        <button id="openCustomerDialogBtn" type="button" onclick="document.getElementById('customerDialog').showModal()">客户管理</button>
         <button id="exportDataBtn" type="button" onclick="FortuneApp.exportData()">导出设置</button>
         <button id="clearOrdersBtn" class="danger" type="button" onclick="FortuneApp.clearOrders()">删除全部注单</button>
       </div>
     </header>
 
-    <main class="layout">
-      <section class="panel customer-panel">
-        <details class="settings-tools">
-          <summary>
-            <span>客户赔率设置</span>
-            <small id="customerSettingsStatus">选择客户后可修改保存</small>
-          </summary>
+    <dialog id="customerDialog" class="settings-dialog">
+      <div class="dialog-head">
+        <div>
+          <h2>客户管理</h2>
+          <p id="customerSettingsStatus">选择客户后可修改保存</p>
+        </div>
+        <form method="dialog">
+          <button class="plain" type="submit">关闭</button>
+        </form>
+      </div>
+      <div class="customer-create-panel">
+        <h3>新建客户</h3>
+        <div class="customer-create-row">
+          <input id="customerNameInput" placeholder="客户名称" />
+          <button id="addCustomerBtn" type="button" onclick="FortuneApp.addCustomer()">新建客户</button>
+        </div>
+      </div>
+      <details class="settings-tools" open>
+        <summary>
+          <span>客户赔率设置</span>
+          <small>按客户单独设置赔率和返水</small>
+        </summary>
           <div class="customer-settings-body">
             <div class="customer-settings-head">
               <label>客户
@@ -57,9 +73,10 @@
             </div>
             <div id="customerOddsGrid" class="odds-grid"></div>
           </div>
-        </details>
-      </section>
+      </details>
+    </dialog>
 
+    <main class="layout">
       <section class="panel order-entry">
         <div class="panel-title">
           <h2>我要录单</h2>
@@ -69,13 +86,6 @@
           <details class="entry-tools">
             <summary>辅助功能</summary>
             <div class="entry-tools-grid">
-              <div>
-                <h3>新建客户</h3>
-                <div class="customer-create-row">
-                  <input id="customerNameInput" placeholder="客户名称" />
-                  <button id="addCustomerBtn" type="button" onclick="FortuneApp.addCustomer()">新建客户</button>
-                </div>
-              </div>
               <div>
                 <h3>帮助</h3>
                 <div class="help-content">
@@ -106,7 +116,7 @@
           <button id="clearInputBtn" type="button" onclick="FortuneApp.clearInput()">清空输入</button>
           <span id="ocrStatus" class="toolbar-status"></span>
         </div>
-        <div class="table-wrap">
+        <div class="table-wrap parsed-table">
           <table>
             <thead>
               <tr>
@@ -268,7 +278,7 @@
           <h2>注单详情</h2>
           <input id="orderSearch" placeholder="搜索区域、玩法、内容" />
         </div>
-        <div class="table-wrap">
+        <div class="table-wrap orders-table">
           <table>
             <thead>
               <tr>
