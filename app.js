@@ -1,3 +1,4 @@
+(() => {
 const RISK_SETTINGS_KEY = "fortune_ai_analytics_mvp_risk_settings";
 const CUSTOMER_KEY = "fortune_ai_analytics_mvp_customers";
 const ORDER_STORAGE_KEY = "fortune_ai_analytics_mvp_orders";
@@ -78,6 +79,24 @@ let riskSettings = normalizeRiskSettings(loadJson(RISK_SETTINGS_KEY, { limitByRe
 let customers = loadJson(CUSTOMER_KEY, [{ id: "default", name: "散客", odds: 47, oddsByType: { ...defaultOdds }, rebateByType: {}, rebate: 0 }]);
 
 const $ = (id) => document.getElementById(id);
+
+function on(id, eventName, handler) {
+  const node = $(id);
+  if (node) node.addEventListener(eventName, handler);
+}
+
+function setClick(id, handler) {
+  const node = $(id);
+  if (node) node.onclick = handler;
+}
+
+function runSafe(task) {
+  try {
+    task();
+  } catch (error) {
+    console.error(error);
+  }
+}
 
 function simpleHash(text) {
   let hash = 2166136261;
@@ -2301,6 +2320,32 @@ function openEntryTools() {
   }
 }
 
+function openCustomerDialog() {
+  const dialog = $("customerDialog");
+  if (!dialog) return;
+  try {
+    if (typeof dialog.showModal === "function") {
+      dialog.showModal();
+      return;
+    }
+  } catch {
+    // Fall back to a regular fixed panel for mobile browsers with partial dialog support.
+  }
+  dialog.setAttribute("open", "");
+  dialog.classList.add("fallback-open");
+}
+
+function closeCustomerDialog() {
+  const dialog = $("customerDialog");
+  if (!dialog) return;
+  if (typeof dialog.close === "function" && dialog.open && !dialog.classList.contains("fallback-open")) {
+    dialog.close();
+    return;
+  }
+  dialog.classList.remove("fallback-open");
+  dialog.removeAttribute("open");
+}
+
 function closeMobilePanels() {
   document.body.classList.remove("mobile-panel-active", "mobile-risk-mode", "mobile-settlement-mode");
   document.querySelectorAll(".mobile-panel-open").forEach((node) => {
@@ -2347,6 +2392,8 @@ window.FortuneApp = {
   clearSettlement,
   clearOrders,
   exportData,
+  openCustomerDialog,
+  closeCustomerDialog,
   openEntryTools,
   openMobilePanel,
   closeMobilePanels,
@@ -2354,29 +2401,31 @@ window.FortuneApp = {
   deviceCode
 };
 
-$("parseBtn").onclick = parseOrders;
-$("addCustomerBtn").onclick = addCustomer;
-$("saveCustomerSettingsBtn").onclick = saveCustomerSettings;
-$("saveParsedBtn").onclick = saveParsed;
-$("clearInputBtn").onclick = clearInput;
-$("fetchLatestDrawBtn").onclick = fetchLatestDraw;
-$("settleBtn").onclick = settleOrders;
-$("clearSettlementBtn").onclick = clearSettlement;
-$("clearOrdersBtn").onclick = clearOrders;
-$("openEntryToolsBtn").onclick = openEntryTools;
-$("orderInput").addEventListener("input", scheduleParseOrders);
-$("orderInput").addEventListener("paste", () => setTimeout(parseOrders, 0));
-$("defaultRegion").addEventListener("change", parseOrders);
-$("entryCustomer").addEventListener("change", parseOrders);
-$("settingsCustomer").addEventListener("change", renderCustomerSettings);
-$("imageOcrInput").addEventListener("change", (event) => recognizeImageOrders(event.target.files?.[0]));
-document.querySelectorAll("[data-mobile-panel]").forEach((button) => {
-  button.addEventListener("click", () => {
-    const panel = button.dataset.mobilePanel;
-    if (panel === "close") closeMobilePanels();
-    else openMobilePanel(panel);
+function bindControls() {
+  setClick("parseBtn", parseOrders);
+  setClick("addCustomerBtn", addCustomer);
+  setClick("saveCustomerSettingsBtn", saveCustomerSettings);
+  setClick("saveParsedBtn", saveParsed);
+  setClick("clearInputBtn", clearInput);
+  setClick("fetchLatestDrawBtn", fetchLatestDraw);
+  setClick("settleBtn", settleOrders);
+  setClick("clearSettlementBtn", clearSettlement);
+  setClick("clearOrdersBtn", clearOrders);
+  setClick("openEntryToolsBtn", openEntryTools);
+  on("orderInput", "input", scheduleParseOrders);
+  on("orderInput", "paste", () => setTimeout(parseOrders, 0));
+  on("defaultRegion", "change", parseOrders);
+  on("entryCustomer", "change", parseOrders);
+  on("settingsCustomer", "change", renderCustomerSettings);
+  on("imageOcrInput", "change", (event) => recognizeImageOrders(event.target.files?.[0]));
+  document.querySelectorAll("[data-mobile-panel]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const panel = button.dataset.mobilePanel;
+      if (panel === "close") closeMobilePanels();
+      else openMobilePanel(panel);
+    });
   });
-});
+}
 
 function resizeOrderInput() {
   const input = $("orderInput");
@@ -2393,15 +2442,17 @@ function clearInput() {
   renderParsed();
   renderDeferred();
 }
-$("riskRegion").addEventListener("change", changeRiskRegion);
-$("adjustOdds").addEventListener("input", renderRisk);
-$("adjustRebate").addEventListener("input", renderRisk);
-$("smartRiskLimitBtn").addEventListener("click", applySmartRiskLimit);
-$("riskLimit").addEventListener("input", updateRiskLimitFromInput);
-$("orderSearch").addEventListener("input", renderOrders);
+bindControls();
+on("riskRegion", "change", changeRiskRegion);
+on("adjustOdds", "input", renderRisk);
+on("adjustRebate", "input", renderRisk);
+on("smartRiskLimitBtn", "click", applySmartRiskLimit);
+on("riskLimit", "input", updateRiskLimitFromInput);
+on("orderSearch", "input", renderOrders);
 
-$("riskLimit").value = money(riskLimitForRegion($("riskRegion").value));
-$("orderInput").addEventListener("input", resizeOrderInput);
-resizeOrderInput();
-initLicenseGate();
-renderAll();
+if ($("riskLimit") && $("riskRegion")) $("riskLimit").value = money(riskLimitForRegion($("riskRegion").value));
+on("orderInput", "input", resizeOrderInput);
+runSafe(resizeOrderInput);
+runSafe(initLicenseGate);
+runSafe(renderAll);
+})();

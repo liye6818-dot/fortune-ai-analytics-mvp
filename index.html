@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>财神爷录单宝</title>
-    <link rel="stylesheet" href="./styles.css?v=20260701_combo_risk_compact" />
+    <link rel="stylesheet" href="./styles.css?v=20260701_controls_fix2" />
   </head>
   <body>
     <section id="licenseGate" class="license-gate" hidden>
@@ -36,7 +36,7 @@
         <span class="privacy-badge">隐私模式：注单仅本机浏览器保存</span>
       </div>
       <div class="header-actions">
-        <button id="openCustomerDialogBtn" type="button" onclick="document.getElementById('customerDialog').showModal()">客户管理</button>
+        <button id="openCustomerDialogBtn" type="button" onclick="FortuneApp.openCustomerDialog()">客户管理</button>
         <button id="openEntryToolsBtn" type="button" onclick="FortuneApp.openEntryTools()">辅助功能</button>
         <button id="clearOrdersBtn" class="danger" type="button" onclick="FortuneApp.clearOrders()">删除全部注单</button>
       </div>
@@ -48,9 +48,7 @@
           <h2>客户管理</h2>
           <p id="customerSettingsStatus">选择客户后可修改保存</p>
         </div>
-        <form method="dialog">
-          <button class="plain" type="submit">关闭</button>
-        </form>
+        <button class="plain" type="button" onclick="FortuneApp.closeCustomerDialog()">关闭</button>
       </div>
       <div class="customer-create-panel">
         <h3>新建客户</h3>
@@ -305,7 +303,7 @@
 
     </main>
 
-    <script src="./app.js?v=20260701_combo_risk_compact"></script>
+    <script src="./app.js?v=20260701_controls_fix2"></script>
   </body>
 </html>
 
