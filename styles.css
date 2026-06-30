@@ -1273,7 +1273,7 @@ label {
   }
 
   .orders-table table {
-    min-width: 900px;
+    min-width: 780px;
   }
 
   .parsed-table thead,
@@ -1299,10 +1299,24 @@ label {
   .orders-table th,
   .orders-table td {
     display: table-cell;
-    padding: 5px 6px;
+    padding: 4px 5px;
     white-space: nowrap;
     vertical-align: middle;
     word-break: normal;
+  }
+
+  .orders-table th:nth-child(5),
+  .orders-table td:nth-child(5) {
+    width: 150px;
+    max-width: 150px;
+    white-space: normal;
+  }
+
+  .orders-table td:nth-child(5) {
+    max-height: 42px;
+    overflow: auto;
+    line-height: 1.25;
+    word-break: break-word;
   }
 
   .parsed-table td::before,
@@ -1337,8 +1351,8 @@ label {
 
   .parsed-table .parsed-number,
   .orders-table .order-edit-number {
-    width: 58px;
-    min-width: 58px;
+    width: 52px;
+    min-width: 52px;
   }
 
   .license-card {
