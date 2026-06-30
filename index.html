@@ -3,6 +3,307 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>财神爷录单宝</title>
+    <link rel="stylesheet" href="./styles.css?v=20260701_order_detail_inline" />
+  </head>
+  <body>
+    <section id="licenseGate" class="license-gate" hidden>
+      <div class="license-hero">
+        <div class="license-mark">单</div>
+      </div>
+      <div class="license-card">
+        <div class="license-icon">¥</div>
+        <h1>收单助手</h1>
+        <p>私密录单 · 即开即清</p>
+        <label>激活码 / LICENSE KEY
+          <input id="licenseInput" autocomplete="off" placeholder="输入激活码" />
+        </label>
+        <label class="license-remember">
+          <input id="rememberLicense" type="checkbox" checked />
+          <span>记住激活码</span>
+        </label>
+        <button id="activateBtn" type="button">立即验证 →</button>
+        <button id="copyDeviceBtn" class="plain" type="button">复制设备识别码</button>
+        <div id="licenseMessage" class="license-message"></div>
+        <div class="device-code">设备识别码 <b id="deviceCodeText"></b></div>
+      </div>
+    </section>
+
+    <header class="app-header">
+      <div>
+        <h1>财神爷录单宝</h1>
+        <p>我要录单、开奖算奖、特码调单模拟</p>
+        <span class="privacy-badge">隐私模式：注单仅本机浏览器保存</span>
+      </div>
+      <div class="header-actions">
+        <button id="openCustomerDialogBtn" type="button" onclick="document.getElementById('customerDialog').showModal()">客户管理</button>
+        <button id="openEntryToolsBtn" type="button" onclick="FortuneApp.openEntryTools()">辅助功能</button>
+        <button id="clearOrdersBtn" class="danger" type="button" onclick="FortuneApp.clearOrders()">删除全部注单</button>
+      </div>
+    </header>
+
+    <dialog id="customerDialog" class="settings-dialog">
+      <div class="dialog-head">
+        <div>
+          <h2>客户管理</h2>
+          <p id="customerSettingsStatus">选择客户后可修改保存</p>
+        </div>
+        <form method="dialog">
+          <button class="plain" type="submit">关闭</button>
+        </form>
+      </div>
+      <div class="customer-create-panel">
+        <h3>新建客户</h3>
+        <div class="customer-create-row">
+          <input id="customerNameInput" placeholder="客户名称" />
+          <button id="addCustomerBtn" type="button" onclick="FortuneApp.addCustomer()">新建客户</button>
+        </div>
+      </div>
+      <details class="settings-tools" open>
+        <summary>
+          <span>客户赔率设置</span>
+          <small>按客户单独设置赔率和返水</small>
+        </summary>
+          <div class="customer-settings-body">
+            <div class="customer-settings-head">
+              <label>客户
+                <select id="settingsCustomer"></select>
+              </label>
+              <button id="saveCustomerSettingsBtn" type="button" onclick="FortuneApp.saveCustomerSettings()">保存设置</button>
+            </div>
+            <div id="customerOddsGrid" class="odds-grid"></div>
+          </div>
+      </details>
+    </dialog>
+
+    <main class="layout">
+      <section id="entryPanel" class="panel order-entry">
+        <div class="panel-title">
+          <h2>我要录单</h2>
+          <span id="parseStatus">等待输入</span>
+        </div>
+        <nav class="mobile-float-nav" aria-label="手机快捷查看">
+          <button type="button" data-mobile-panel="zodiac">统计</button>
+          <button type="button" data-mobile-panel="draw">开奖</button>
+          <button type="button" data-mobile-panel="risk">风险</button>
+          <button type="button" data-mobile-panel="settlement">结算</button>
+        </nav>
+        <textarea id="orderInput" spellcheck="false" placeholder="示例：澳门 特码 06 08 各数 50&#10;港 特肖 鼠牛 各肖 20&#10;澳门 平尾 5尾 9尾 各 100"></textarea>
+        <div class="toolbar">
+          <select id="defaultRegion">
+            <option value="澳门">默认澳门</option>
+            <option value="香港">默认香港</option>
+          </select>
+          <select id="entryCustomer"></select>
+          <label class="file-button" for="imageOcrInput">识别图片文字</label>
+          <input id="imageOcrInput" type="file" accept="image/*" />
+          <button id="parseBtn" type="button" onclick="FortuneApp.parseOrders()">解析注单</button>
+          <button id="saveParsedBtn" type="button" onclick="FortuneApp.saveParsed()">入库</button>
+          <button id="clearInputBtn" type="button" onclick="FortuneApp.clearInput()">清空输入</button>
+          <span id="ocrStatus" class="toolbar-status"></span>
+        </div>
+        <div class="table-wrap parsed-table">
+          <table>
+            <thead>
+              <tr>
+                <th>区域</th>
+                <th>玩法</th>
+                <th>内容</th>
+                <th>金额</th>
+                <th>赔率</th>
+                <th>总额</th>
+                <th>提示</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody id="parsedRows"></tbody>
+          </table>
+        </div>
+        <details id="zodiacPanel" class="zodiac-risk-box mobile-collapsible">
+          <summary>
+            <span>一肖连肖杂项统计</span>
+            <small id="zodiacRiskSummary">12 个生肖累计金额</small>
+          </summary>
+          <button class="sheet-close" type="button" data-mobile-panel="close">关闭</button>
+          <div id="zodiacRiskRows" class="zodiac-grid"></div>
+        </details>
+      </section>
+
+      <section id="ordersPanel" class="panel orders-panel">
+        <div class="panel-title">
+          <h2>注单详情</h2>
+          <input id="orderSearch" placeholder="搜索区域、玩法、内容" />
+        </div>
+        <div class="table-wrap orders-table">
+          <table>
+            <thead>
+              <tr>
+                <th>时间</th>
+                <th>客户</th>
+                <th>区域</th>
+                <th>玩法</th>
+                <th>内容</th>
+                <th>金额</th>
+                <th>赔率</th>
+                <th>返水</th>
+                <th>总额</th>
+                <th>状态</th>
+                <th>盈亏</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody id="orderRows"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="statsPanel" class="panel stats-panel">
+        <div class="panel-title">
+          <h2>数据总览</h2>
+          <span id="lastSaved">注单仅本机保存</span>
+        </div>
+        <div class="stats-grid">
+          <div><b id="totalOrders">0</b><span>总注单数</span></div>
+          <div><b id="totalAmount">0</b><span>总金额</span></div>
+          <div><b id="winAmount">0</b><span>中奖金额</span></div>
+          <div><b id="netProfit">0</b><span>净盈亏</span></div>
+        </div>
+        <div id="typeStats" class="mini-list"></div>
+      </section>
+
+      <section id="drawPanel" class="panel draw-panel">
+        <button class="sheet-close" type="button" data-mobile-panel="close">关闭</button>
+        <div class="panel-title">
+          <h2>开奖算奖</h2>
+          <span>第 7 球为特码</span>
+        </div>
+        <div class="form-grid">
+          <label>区域
+            <select id="drawRegion">
+              <option value="澳门">澳门</option>
+              <option value="香港">香港</option>
+            </select>
+          </label>
+          <label>期号
+            <input id="drawPeriod" placeholder="例如 2026175" />
+          </label>
+          <label>开奖号码
+            <input id="drawNumbers" placeholder="7 个号码，例如 01 02 03 04 05 06 07" />
+          </label>
+        </div>
+        <div class="toolbar">
+          <button id="fetchLatestDrawBtn" type="button" onclick="FortuneApp.fetchLatestDraw()">拉取最新开奖</button>
+          <button id="settleBtn" type="button" onclick="FortuneApp.settleOrders()">执行算奖</button>
+          <button id="clearSettlementBtn" type="button" onclick="FortuneApp.clearSettlement()">清空算奖状态</button>
+        </div>
+        <div id="drawSummary" class="summary-line">尚未开奖</div>
+      </section>
+
+      <section id="riskPanel" class="panel risk-panel">
+        <button class="sheet-close" type="button" data-mobile-panel="close">关闭</button>
+        <div class="panel-title">
+          <h2>特码调单</h2>
+          <span id="riskSummary">等待注单</span>
+        </div>
+        <div class="risk-controls">
+          <label>区域
+            <select id="riskRegion">
+              <option value="澳门">澳门</option>
+              <option value="香港">香港</option>
+            </select>
+          </label>
+          <label>调单赔率
+            <input id="adjustOdds" type="number" value="47" min="1" step="0.1" />
+          </label>
+          <label>智能推荐阈值
+            <input id="adjustRebate" type="hidden" value="0" />
+            <button id="smartRiskLimitBtn" class="smart-limit-btn" type="button">计算并填入</button>
+            <small id="smartRiskLimitText">按当前盘口推荐</small>
+          </label>
+          <label>留额阈值
+            <input id="riskLimit" type="number" value="0" min="0" step="1" />
+          </label>
+        </div>
+        <div class="risk-extremes">
+          <div><span>最大盈利</span><b id="maxProfit">0</b></div>
+          <div><span>最大亏损</span><b id="maxLoss">0</b></div>
+          <div><span>特码核对</span><b id="specialRiskCheck">0 / 0</b></div>
+        </div>
+        <div class="risk-workspace">
+          <div class="table-wrap risk-table">
+            <table>
+              <thead>
+                <tr>
+                  <th>号</th>
+                  <th>生肖</th>
+                  <th>原金额</th>
+                  <th>来源</th>
+                  <th>调整</th>
+                  <th>总计</th>
+                  <th>超出</th>
+                  <th>阈值后盈亏</th>
+                </tr>
+              </thead>
+              <tbody id="riskRows"></tbody>
+            </table>
+          </div>
+          <aside class="report-panel">
+            <div class="panel-title compact">
+              <h3>待上报列表</h3>
+              <div class="report-actions">
+                <button id="copyReportBtn" class="plain" type="button" onclick="FortuneApp.copyReportList()">一键复制</button>
+                <button id="markReportedBtn" class="plain" type="button" onclick="FortuneApp.markReportSubmitted()">已上报</button>
+                <button id="clearReportedBtn" class="plain danger-text" type="button" onclick="FortuneApp.clearReportedList()">清空已上报</button>
+              </div>
+            </div>
+            <textarea id="reportText" readonly placeholder="超过留额后自动生成，例如：33=365"></textarea>
+            <div class="table-wrap risk-table report-table">
+              <table>
+                <thead>
+                  <tr>
+                    <th>号</th>
+                    <th>总计</th>
+                    <th>已上报</th>
+                    <th>待上报</th>
+                  </tr>
+                </thead>
+                <tbody id="reportRows"></tbody>
+              </table>
+            </div>
+          </aside>
+        </div>
+        <details id="settlementPanel" class="settlement-fold mobile-collapsible">
+          <summary>
+            <span>客户结算区</span>
+          </summary>
+          <div class="table-wrap settlement-table">
+            <table>
+              <thead>
+                <tr>
+                  <th>客户</th>
+                  <th>注单数</th>
+                  <th>总金额</th>
+                  <th>中奖</th>
+                  <th>返水</th>
+                  <th>净结算</th>
+                </tr>
+              </thead>
+              <tbody id="customerSettlementRows"></tbody>
+            </table>
+          </div>
+        </details>
+      </section>
+
+    </main>
+
+    <script src="./main.js?v=20260701_order_detail_inline"></script>
+  </body>
+</html>
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Fortune AI Analytics MVP</title>
     <link rel="stylesheet" href="./styles.css?v=20260630_mobile_sheet" />
   </head>
