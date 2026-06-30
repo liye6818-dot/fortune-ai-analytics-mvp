@@ -20,6 +20,7 @@ body {
   background: var(--bg);
   color: var(--text);
   font-family: "Microsoft YaHei", "Segoe UI", Arial, sans-serif;
+  line-height: 1.45;
 }
 
 body.locked {
@@ -175,9 +176,10 @@ button {
   border: 1px solid var(--primary);
   background: var(--primary);
   color: #fff;
-  border-radius: 6px;
+  border-radius: 8px;
   padding: 8px 12px;
   cursor: pointer;
+  font-weight: 700;
 }
 
 button:hover {
@@ -229,9 +231,17 @@ input,
 select,
 textarea {
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: 8px;
   background: #fff;
   color: var(--text);
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(22, 104, 220, 0.12);
+  outline: none;
 }
 
 textarea {
@@ -257,12 +267,13 @@ select {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 18px 24px;
-  background: #ffffff;
+  padding: 16px 24px;
+  background: rgba(255, 255, 255, 0.94);
   border-bottom: 1px solid var(--line);
   position: sticky;
   top: 0;
   z-index: 10;
+  backdrop-filter: blur(8px);
 }
 
 .app-header h1,
@@ -299,6 +310,33 @@ select {
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
+}
+
+.header-actions {
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.header-actions button {
+  min-height: 36px;
+  border-color: transparent;
+  background: #ffffff;
+  color: var(--text);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+}
+
+.header-actions button:first-child {
+  border-color: rgba(22, 104, 220, 0.18);
+  background: #eff6ff;
+  color: var(--primary);
+}
+
+.header-actions button.danger {
+  border-color: rgba(198, 40, 40, 0.26);
+  background: #fff5f5;
+  color: var(--danger);
 }
 
 .header-actions input {
@@ -366,7 +404,7 @@ select {
 .layout {
   display: grid;
   grid-template-columns: minmax(420px, 1.1fr) minmax(360px, 0.9fr);
-  gap: 16px;
+  gap: 14px;
   padding: 16px;
 }
 
@@ -376,6 +414,7 @@ select {
   border-radius: 8px;
   padding: 16px;
   min-width: 0;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
 }
 
 .order-entry,
@@ -516,7 +555,7 @@ td small {
 
 .entry-tools {
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: 8px;
   padding: 8px 10px;
   background: #fbfcfd;
 }
@@ -844,12 +883,14 @@ label {
 
   .app-header {
     position: static;
-    padding: 12px;
-    gap: 10px;
+    padding: 14px 12px 10px;
+    gap: 12px;
+    background: #fff;
   }
 
   .app-header h1 {
-    font-size: 18px;
+    font-size: 21px;
+    line-height: 1.12;
   }
 
   .dialog-head {
@@ -872,7 +913,6 @@ label {
     display: none;
   }
 
-  .header-actions,
   .toolbar,
   .customer-settings-head,
   .risk-controls {
@@ -881,20 +921,38 @@ label {
     width: 100%;
   }
 
+  .header-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    width: 100%;
+    gap: 6px;
+    padding: 6px;
+    border-radius: 8px;
+  }
+
   .header-actions > *,
   .toolbar > *,
   .risk-controls > * {
     width: 100%;
   }
 
+  .header-actions button {
+    min-height: 38px;
+    padding: 6px 4px;
+    font-size: 13px;
+    line-height: 1.2;
+    white-space: normal;
+  }
+
   .layout {
-    padding: 8px;
-    gap: 8px;
+    padding: 8px 8px 12px;
+    gap: 10px;
   }
 
   .panel {
     border-radius: 8px;
-    padding: 10px;
+    padding: 12px;
+    box-shadow: 0 1px 5px rgba(15, 23, 42, 0.05);
   }
 
   .panel-title {
@@ -925,12 +983,30 @@ label {
   .file-button,
   input,
   select {
-    min-height: 34px;
+    min-height: 38px;
   }
 
   button,
   .file-button {
-    padding: 7px 9px;
+    padding: 8px 9px;
+  }
+
+  .toolbar {
+    gap: 7px;
+  }
+
+  .toolbar button,
+  .toolbar .file-button {
+    min-height: 42px;
+    font-size: 15px;
+  }
+
+  .entry-tools {
+    padding: 9px 10px;
+  }
+
+  .entry-tools summary {
+    font-size: 15px;
   }
 
   .table-wrap {
@@ -1173,6 +1249,96 @@ label {
 
   .parsed-targets {
     min-width: 220px;
+  }
+
+  .parsed-table,
+  .orders-table {
+    max-height: 56vh;
+    overflow: auto;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    margin-top: 8px;
+  }
+
+  .parsed-table table,
+  .orders-table table {
+    display: table;
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+
+  .parsed-table table {
+    min-width: 660px;
+  }
+
+  .orders-table table {
+    min-width: 900px;
+  }
+
+  .parsed-table thead,
+  .orders-table thead {
+    display: table-header-group;
+  }
+
+  .parsed-table tbody,
+  .orders-table tbody {
+    display: table-row-group;
+  }
+
+  .parsed-table tr,
+  .orders-table tr {
+    display: table-row;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+
+  .parsed-table th,
+  .parsed-table td,
+  .orders-table th,
+  .orders-table td {
+    display: table-cell;
+    padding: 5px 6px;
+    white-space: nowrap;
+    vertical-align: middle;
+    word-break: normal;
+  }
+
+  .parsed-table td::before,
+  .orders-table td::before {
+    content: none !important;
+  }
+
+  .parsed-table input,
+  .parsed-table select,
+  .parsed-table textarea,
+  .orders-table input,
+  .orders-table select,
+  .orders-table textarea {
+    min-height: 30px;
+    border-radius: 6px;
+    padding: 3px 6px;
+    font-size: 12px;
+  }
+
+  .parsed-table .targets-cell {
+    min-width: 150px;
+    white-space: normal;
+  }
+
+  .parsed-table .parsed-targets {
+    width: 150px;
+    min-width: 150px;
+    min-height: 34px;
+    max-height: 58px;
+    line-height: 1.25;
+  }
+
+  .parsed-table .parsed-number,
+  .orders-table .order-edit-number {
+    width: 58px;
+    min-width: 58px;
   }
 
   .license-card {
