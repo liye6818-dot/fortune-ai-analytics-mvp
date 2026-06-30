@@ -1251,6 +1251,96 @@ label {
     min-width: 220px;
   }
 
+  .parsed-table,
+  .orders-table {
+    max-height: 56vh;
+    overflow: auto;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    margin-top: 8px;
+  }
+
+  .parsed-table table,
+  .orders-table table {
+    display: table;
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+
+  .parsed-table table {
+    min-width: 660px;
+  }
+
+  .orders-table table {
+    min-width: 900px;
+  }
+
+  .parsed-table thead,
+  .orders-table thead {
+    display: table-header-group;
+  }
+
+  .parsed-table tbody,
+  .orders-table tbody {
+    display: table-row-group;
+  }
+
+  .parsed-table tr,
+  .orders-table tr {
+    display: table-row;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+
+  .parsed-table th,
+  .parsed-table td,
+  .orders-table th,
+  .orders-table td {
+    display: table-cell;
+    padding: 5px 6px;
+    white-space: nowrap;
+    vertical-align: middle;
+    word-break: normal;
+  }
+
+  .parsed-table td::before,
+  .orders-table td::before {
+    content: none !important;
+  }
+
+  .parsed-table input,
+  .parsed-table select,
+  .parsed-table textarea,
+  .orders-table input,
+  .orders-table select,
+  .orders-table textarea {
+    min-height: 30px;
+    border-radius: 6px;
+    padding: 3px 6px;
+    font-size: 12px;
+  }
+
+  .parsed-table .targets-cell {
+    min-width: 150px;
+    white-space: normal;
+  }
+
+  .parsed-table .parsed-targets {
+    width: 150px;
+    min-width: 150px;
+    min-height: 34px;
+    max-height: 58px;
+    line-height: 1.25;
+  }
+
+  .parsed-table .parsed-number,
+  .orders-table .order-edit-number {
+    width: 58px;
+    min-width: 58px;
+  }
+
   .license-card {
     padding: 30px 22px 22px;
     border-radius: 22px;
