@@ -388,6 +388,29 @@ function expandZodiacComboOrder(order) {
   });
 }
 
+function expandMainZodiacSingles(order) {
+  if (!["特肖", "平肖", "一肖"].includes(order?.type)) return [order];
+  const targets = uniqueTargets((order.targets || []).filter((target) => zodiacOrder.includes(String(target))));
+  if (!targets.includes(currentYearZodiac)) return [order];
+  const otherTargets = targets.filter((target) => target !== currentYearZodiac);
+  const mainOrder = {
+    ...order,
+    id: otherTargets.length ? makeId() : order.id,
+    type: "主肖",
+    targets: [currentYearZodiac],
+    hint: "主肖已独立套用赔率返水"
+  };
+  updateOrderTotal(mainOrder);
+  if (!otherTargets.length) return [mainOrder];
+  const otherOrder = {
+    ...order,
+    targets: otherTargets,
+    hint: "已拆出主肖"
+  };
+  updateOrderTotal(otherOrder);
+  return [otherOrder, mainOrder];
+}
+
 function applyCustomerDefaults(order, customer = currentCustomer()) {
   order.customerId = customer.id;
   order.customerName = customer.name;
@@ -1417,6 +1440,7 @@ function parseOrders() {
   const customer = currentCustomer();
   parsed = parseInputText($("orderInput").value, $("defaultRegion").value)
     .flatMap(expandZodiacComboOrder)
+    .flatMap(expandMainZodiacSingles)
     .map((order) => applyCustomerDefaults(order, customer));
   renderParsed();
   renderDeferred();
@@ -1646,7 +1670,7 @@ function updateParsedFromEdit(event) {
     order.odds = customerOdds(customer, order);
     order.rebate = customerRebate(customer, order);
   }
-  const expandedOrders = expandZodiacComboOrder(order);
+  const expandedOrders = expandZodiacComboOrder(order).flatMap(expandMainZodiacSingles);
   if (expandedOrders.length > 1) {
     parsed.splice(index, 1, ...expandedOrders.map((item) => applyCustomerDefaults(item, customer)));
   }
