@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Fortune AI Analytics MVP</title>
-    <link rel="stylesheet" href="./styles.css?v=20260630_data_guard_compact" />
+    <link rel="stylesheet" href="./styles.css?v=20260630_mobile_sheet" />
   </head>
   <body>
     <section id="licenseGate" class="license-gate" hidden>
@@ -77,30 +77,10 @@
     </dialog>
 
     <main class="layout">
-      <section class="panel order-entry">
+      <section id="entryPanel" class="panel order-entry">
         <div class="panel-title">
           <h2>我要录单</h2>
           <span id="parseStatus">等待输入</span>
-        </div>
-        <div class="entry-folders">
-          <details id="entryTools" class="entry-tools">
-            <summary>辅助功能</summary>
-            <div class="entry-tools-grid">
-              <div>
-                <h3>帮助</h3>
-                <div class="help-content">
-                  <p>先选客户，再粘贴注单。系统会按“区域、玩法、内容、金额”的顺序拆成表格，表格里的玩法、号码、金额、赔率都可以再手动改。</p>
-                  <p>数字用点、空格、逗号、斜杠、等号隔开都尽量按“各个数”处理，例如 14.35.22 各20 会拆成 14、35、22，每个 20。</p>
-                  <p>一行里出现多个金额时，会按前面的号码段分别拆开；前面几段没有金额、后面出现“各20/个数20/20斤”时，前面段也会先填 20，方便再核对修改。</p>
-                  <p>红波、蓝波、绿波、红单、红双、蓝单、蓝双、绿单、绿双会直接展开成对应号码；连肖会保留为连肖玩法，用客户赔率里的带主/无主设置。</p>
-                  <p>图片识别只负责把图片文字放进录单框，识别后先由客户核对文字，再点解析。一肖风险统计会按 12 个生肖汇总当前页面金额。</p>
-                  <p>中奖规则：一肖、主肖看 7 个开奖号码里是否有对应生肖；二连肖到五连肖要求下注生肖全部在 7 个球里出现。</p>
-                  <p>平尾看 7 个球尾数；二连尾到五连尾要求下注尾数全部在 7 个球里出现。五不中到十不中要求 7 个球里一个下注号码都没有。</p>
-                  <p>二中二、三中三只看前 6 个平码，下注号码全部对应上才中。特串要求前 6 个平码里有一个命中，同时第 7 个特码也命中。</p>
-                </div>
-              </div>
-            </div>
-          </details>
         </div>
         <textarea id="orderInput" spellcheck="false" placeholder="示例：澳门 特码 06 08 各数 50&#10;港 特肖 鼠牛 各肖 20&#10;澳门 平尾 5尾 9尾 各 100"></textarea>
         <div class="toolbar">
@@ -133,16 +113,16 @@
             <tbody id="parsedRows"></tbody>
           </table>
         </div>
-        <div class="zodiac-risk-box">
-          <div class="panel-title compact">
-            <h3>一肖风险统计</h3>
-            <span id="zodiacRiskSummary">12 个生肖累计金额</span>
-          </div>
+        <details id="zodiacPanel" class="zodiac-risk-box mobile-collapsible">
+          <summary>
+            <span>一肖连肖杂项统计</span>
+            <small id="zodiacRiskSummary">12 个生肖累计金额</small>
+          </summary>
           <div id="zodiacRiskRows" class="zodiac-grid"></div>
-        </div>
+        </details>
       </section>
 
-      <section class="panel stats-panel">
+      <section id="statsPanel" class="panel stats-panel">
         <div class="panel-title">
           <h2>数据总览</h2>
           <span id="lastSaved">注单仅本机保存</span>
@@ -156,7 +136,7 @@
         <div id="typeStats" class="mini-list"></div>
       </section>
 
-      <section class="panel draw-panel">
+      <section id="drawPanel" class="panel draw-panel">
         <div class="panel-title">
           <h2>开奖算奖</h2>
           <span>第 7 球为特码</span>
@@ -183,7 +163,7 @@
         <div id="drawSummary" class="summary-line">尚未开奖</div>
       </section>
 
-      <section class="panel risk-panel">
+      <section id="riskPanel" class="panel risk-panel">
         <div class="panel-title">
           <h2>特码调单</h2>
           <span id="riskSummary">等待注单</span>
@@ -255,25 +235,29 @@
             </div>
           </aside>
         </div>
-        <h3>客户结算区</h3>
-        <div class="table-wrap settlement-table">
-          <table>
-            <thead>
-              <tr>
-                <th>客户</th>
-                <th>注单数</th>
-                <th>总金额</th>
-                <th>中奖</th>
-                <th>返水</th>
-                <th>净结算</th>
-              </tr>
-            </thead>
-            <tbody id="customerSettlementRows"></tbody>
-          </table>
-        </div>
+        <details id="settlementPanel" class="settlement-fold mobile-collapsible">
+          <summary>
+            <span>客户结算区</span>
+          </summary>
+          <div class="table-wrap settlement-table">
+            <table>
+              <thead>
+                <tr>
+                  <th>客户</th>
+                  <th>注单数</th>
+                  <th>总金额</th>
+                  <th>中奖</th>
+                  <th>返水</th>
+                  <th>净结算</th>
+                </tr>
+              </thead>
+              <tbody id="customerSettlementRows"></tbody>
+            </table>
+          </div>
+        </details>
       </section>
 
-      <section class="panel orders-panel">
+      <section id="ordersPanel" class="panel orders-panel">
         <div class="panel-title">
           <h2>注单详情</h2>
           <input id="orderSearch" placeholder="搜索区域、玩法、内容" />
@@ -302,6 +286,15 @@
       </section>
     </main>
 
-    <script src="./main.js?v=20260630_data_guard"></script>
+    <nav class="mobile-float-nav" aria-label="手机快捷查看">
+      <button type="button" data-mobile-panel="zodiac">统计</button>
+      <button type="button" data-mobile-panel="draw">开奖</button>
+      <button type="button" data-mobile-panel="risk">风险</button>
+      <button type="button" data-mobile-panel="settlement">结算</button>
+      <button type="button" data-mobile-panel="orders">注单</button>
+      <button class="mobile-close" type="button" data-mobile-panel="close">关闭</button>
+    </nav>
+
+    <script src="./main.js?v=20260630_mobile_sheet"></script>
   </body>
 </html>
