@@ -2228,11 +2228,43 @@ function exportData() {
 }
 
 function openEntryTools() {
-  const tools = $("entryTools");
+  const tools = document.querySelector(".zodiac-risk-box");
   if (tools) {
-    tools.open = true;
-    tools.scrollIntoView({ behavior: "smooth", block: "start" });
+    openMobilePanel("zodiac");
   }
+}
+
+function closeMobilePanels() {
+  document.body.classList.remove("mobile-panel-active", "mobile-risk-mode", "mobile-settlement-mode");
+  document.querySelectorAll(".mobile-panel-open").forEach((node) => {
+    node.classList.remove("mobile-panel-open");
+  });
+}
+
+function openMobilePanel(name) {
+  closeMobilePanels();
+  let target = null;
+  if (name === "zodiac") {
+    target = $("zodiacPanel");
+    if (target) target.open = true;
+  } else if (name === "draw") {
+    target = $("drawPanel");
+  } else if (name === "risk") {
+    target = $("riskPanel");
+    document.body.classList.add("mobile-risk-mode");
+  } else if (name === "settlement") {
+    target = $("riskPanel");
+    const settlement = $("settlementPanel");
+    if (settlement) settlement.open = true;
+    document.body.classList.add("mobile-settlement-mode");
+  } else if (name === "orders") {
+    target = $("ordersPanel");
+  } else if (name === "stats") {
+    target = $("statsPanel");
+  }
+  if (!target) return;
+  document.body.classList.add("mobile-panel-active");
+  target.classList.add("mobile-panel-open");
 }
 
 window.FortuneApp = {
@@ -2251,6 +2283,8 @@ window.FortuneApp = {
   clearOrders,
   exportData,
   openEntryTools,
+  openMobilePanel,
+  closeMobilePanels,
   buildLicenseKey,
   deviceCode
 };
@@ -2271,6 +2305,13 @@ $("defaultRegion").addEventListener("change", parseOrders);
 $("entryCustomer").addEventListener("change", parseOrders);
 $("settingsCustomer").addEventListener("change", renderCustomerSettings);
 $("imageOcrInput").addEventListener("change", (event) => recognizeImageOrders(event.target.files?.[0]));
+document.querySelectorAll("[data-mobile-panel]").forEach((button) => {
+  button.addEventListener("click", () => {
+    const panel = button.dataset.mobilePanel;
+    if (panel === "close") closeMobilePanels();
+    else openMobilePanel(panel);
+  });
+});
 
 function clearInput() {
   $("orderInput").value = "";
