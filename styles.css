@@ -1372,51 +1372,64 @@ label {
 
 @media (max-width: 640px) {
   body {
-    padding-bottom: 76px;
+    padding-bottom: 12px;
   }
 
   .mobile-float-nav {
-    position: fixed;
-    left: 8px;
-    right: 8px;
-    bottom: 8px;
-    z-index: 80;
+    position: static;
     display: grid;
-    grid-template-columns: repeat(6, minmax(0, 1fr));
-    gap: 4px;
-    padding: 6px;
-    border: 1px solid var(--line);
-    border-radius: 10px;
-    background: rgba(255, 255, 255, 0.96);
-    box-shadow: 0 12px 28px rgba(15, 23, 42, 0.18);
-    backdrop-filter: blur(10px);
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 6px;
+    margin: 0 0 8px;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    backdrop-filter: none;
   }
 
   .mobile-float-nav button {
-    min-height: 36px;
-    padding: 5px 2px;
+    min-height: 34px;
+    padding: 6px 2px;
     border-radius: 7px;
-    font-size: 12px;
+    font-size: 13px;
     line-height: 1.1;
   }
 
-  .mobile-float-nav .mobile-close {
-    border-color: rgba(198, 40, 40, 0.26);
+  .sheet-close {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    float: right;
+    min-height: 32px;
+    margin: -4px 0 8px 8px;
+    padding: 5px 10px;
+    border: 1px solid var(--line);
     background: #fff5f5;
     color: var(--danger);
+  }
+
+  #orderInput {
+    min-height: 118px;
+    max-height: none;
+    overflow: hidden;
+  }
+
+  .order-entry {
+    padding-bottom: 10px;
   }
 
   .stats-panel,
   .draw-panel,
   .risk-panel,
-  .orders-panel,
   .order-entry .zodiac-risk-box {
     display: none;
   }
 
   .mobile-panel-open {
     position: fixed;
-    inset: 64px 8px 58px;
+    inset: 54px 8px 10px;
     z-index: 70;
     display: block !important;
     overflow: auto;
@@ -1452,6 +1465,25 @@ label {
 
   body.mobile-risk-mode .risk-panel .settlement-fold {
     display: none;
+  }
+
+  .orders-panel {
+    display: block;
+    margin-top: -2px;
+  }
+
+  .orders-panel .panel-title {
+    align-items: center;
+    margin-bottom: 6px;
+  }
+
+  .orders-panel .panel-title h2 {
+    font-size: 15px;
+  }
+
+  .orders-panel #orderSearch {
+    min-height: 32px;
+    font-size: 13px;
   }
 
   .parsed-table,

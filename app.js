@@ -2257,8 +2257,6 @@ function openMobilePanel(name) {
     const settlement = $("settlementPanel");
     if (settlement) settlement.open = true;
     document.body.classList.add("mobile-settlement-mode");
-  } else if (name === "orders") {
-    target = $("ordersPanel");
   } else if (name === "stats") {
     target = $("statsPanel");
   }
@@ -2313,8 +2311,16 @@ document.querySelectorAll("[data-mobile-panel]").forEach((button) => {
   });
 });
 
+function resizeOrderInput() {
+  const input = $("orderInput");
+  if (!input) return;
+  input.style.height = "auto";
+  input.style.height = `${Math.max(118, input.scrollHeight)}px`;
+}
+
 function clearInput() {
   $("orderInput").value = "";
+  resizeOrderInput();
   parsed = [];
   deferredLines = [];
   renderParsed();
@@ -2328,5 +2334,7 @@ $("riskLimit").addEventListener("input", updateRiskLimitFromInput);
 $("orderSearch").addEventListener("input", renderOrders);
 
 $("riskLimit").value = money(riskLimitForRegion($("riskRegion").value));
+$("orderInput").addEventListener("input", resizeOrderInput);
+resizeOrderInput();
 initLicenseGate();
 renderAll();

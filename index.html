@@ -3,8 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Fortune AI Analytics MVP</title>
-    <link rel="stylesheet" href="./styles.css?v=20260630_mobile_sheet" />
+    <title>财神爷录单宝</title>
+    <link rel="stylesheet" href="./styles.css?v=20260701_order_detail_inline" />
   </head>
   <body>
     <section id="licenseGate" class="license-gate" hidden>
@@ -31,7 +31,7 @@
 
     <header class="app-header">
       <div>
-        <h1>Fortune AI Analytics MVP</h1>
+        <h1>财神爷录单宝</h1>
         <p>我要录单、开奖算奖、特码调单模拟</p>
         <span class="privacy-badge">隐私模式：注单仅本机浏览器保存</span>
       </div>
@@ -82,6 +82,12 @@
           <h2>我要录单</h2>
           <span id="parseStatus">等待输入</span>
         </div>
+        <nav class="mobile-float-nav" aria-label="手机快捷查看">
+          <button type="button" data-mobile-panel="zodiac">统计</button>
+          <button type="button" data-mobile-panel="draw">开奖</button>
+          <button type="button" data-mobile-panel="risk">风险</button>
+          <button type="button" data-mobile-panel="settlement">结算</button>
+        </nav>
         <textarea id="orderInput" spellcheck="false" placeholder="示例：澳门 特码 06 08 各数 50&#10;港 特肖 鼠牛 各肖 20&#10;澳门 平尾 5尾 9尾 各 100"></textarea>
         <div class="toolbar">
           <select id="defaultRegion">
@@ -118,8 +124,37 @@
             <span>一肖连肖杂项统计</span>
             <small id="zodiacRiskSummary">12 个生肖累计金额</small>
           </summary>
+          <button class="sheet-close" type="button" data-mobile-panel="close">关闭</button>
           <div id="zodiacRiskRows" class="zodiac-grid"></div>
         </details>
+      </section>
+
+      <section id="ordersPanel" class="panel orders-panel">
+        <div class="panel-title">
+          <h2>注单详情</h2>
+          <input id="orderSearch" placeholder="搜索区域、玩法、内容" />
+        </div>
+        <div class="table-wrap orders-table">
+          <table>
+            <thead>
+              <tr>
+                <th>时间</th>
+                <th>客户</th>
+                <th>区域</th>
+                <th>玩法</th>
+                <th>内容</th>
+                <th>金额</th>
+                <th>赔率</th>
+                <th>返水</th>
+                <th>总额</th>
+                <th>状态</th>
+                <th>盈亏</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody id="orderRows"></tbody>
+          </table>
+        </div>
       </section>
 
       <section id="statsPanel" class="panel stats-panel">
@@ -137,6 +172,7 @@
       </section>
 
       <section id="drawPanel" class="panel draw-panel">
+        <button class="sheet-close" type="button" data-mobile-panel="close">关闭</button>
         <div class="panel-title">
           <h2>开奖算奖</h2>
           <span>第 7 球为特码</span>
@@ -164,6 +200,7 @@
       </section>
 
       <section id="riskPanel" class="panel risk-panel">
+        <button class="sheet-close" type="button" data-mobile-panel="close">关闭</button>
         <div class="panel-title">
           <h2>特码调单</h2>
           <span id="riskSummary">等待注单</span>
@@ -257,44 +294,8 @@
         </details>
       </section>
 
-      <section id="ordersPanel" class="panel orders-panel">
-        <div class="panel-title">
-          <h2>注单详情</h2>
-          <input id="orderSearch" placeholder="搜索区域、玩法、内容" />
-        </div>
-        <div class="table-wrap orders-table">
-          <table>
-            <thead>
-              <tr>
-                <th>时间</th>
-                <th>客户</th>
-                <th>区域</th>
-                <th>玩法</th>
-                <th>内容</th>
-                <th>金额</th>
-                <th>赔率</th>
-                <th>返水</th>
-                <th>总额</th>
-                <th>状态</th>
-                <th>盈亏</th>
-                <th>操作</th>
-              </tr>
-            </thead>
-            <tbody id="orderRows"></tbody>
-          </table>
-        </div>
-      </section>
     </main>
 
-    <nav class="mobile-float-nav" aria-label="手机快捷查看">
-      <button type="button" data-mobile-panel="zodiac">统计</button>
-      <button type="button" data-mobile-panel="draw">开奖</button>
-      <button type="button" data-mobile-panel="risk">风险</button>
-      <button type="button" data-mobile-panel="settlement">结算</button>
-      <button type="button" data-mobile-panel="orders">注单</button>
-      <button class="mobile-close" type="button" data-mobile-panel="close">关闭</button>
-    </nav>
-
-    <script src="./main.js?v=20260630_mobile_sheet"></script>
+    <script src="./main.js?v=20260701_order_detail_inline"></script>
   </body>
 </html>
