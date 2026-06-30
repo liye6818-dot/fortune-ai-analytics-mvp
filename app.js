@@ -5,6 +5,7 @@ const ADJUST_STORAGE_KEY = "fortune_ai_analytics_mvp_adjustments";
 const REPORTED_STORAGE_KEY = "fortune_ai_analytics_mvp_reported";
 const LICENSE_SESSION_KEY = "fortune_ai_analytics_mvp_license";
 const DEVICE_KEY = "fortune_ai_analytics_mvp_device";
+const DATA_BACKUP_KEY = "fortune_ai_analytics_mvp_backup";
 const MACAU_DRAW_API = "https://macaumarksix.com/api/macaujc2.com";
 const HONGKONG_DRAW_API = "https://api3.marksix6.net/lottery_api.php?type=hk";
 const CORS_PROXY = "https://api.allorigins.win/raw?url=";
@@ -88,11 +89,12 @@ function simpleHash(text) {
 }
 
 function deviceCode() {
-  let code = localStorage.getItem(DEVICE_KEY);
+  let code = safeStorageGet(DEVICE_KEY);
   if (!code) {
-    const source = [navigator.userAgent, navigator.language, screen.width, screen.height, Date.now(), Math.random()].join("|");
+    const timezone = Intl.DateTimeFormat?.().resolvedOptions?.().timeZone || "";
+    const source = [navigator.userAgent, navigator.language, navigator.platform, screen.width, screen.height, timezone].join("|");
     code = `DEV-${simpleHash(source)}-${simpleHash(source.split("").reverse().join(""))}`;
-    localStorage.setItem(DEVICE_KEY, code);
+    safeStorageSet(DEVICE_KEY, code);
   }
   return code;
 }
@@ -198,10 +200,54 @@ function makeId() {
 
 function loadJson(key, fallback) {
   try {
-    return JSON.parse(localStorage.getItem(key)) ?? fallback;
-  } catch {
+    const direct = safeStorageGet(key);
+    if (direct) return JSON.parse(direct) ?? fallback;
+    const backup = loadBackupValue(key);
+    if (backup !== undefined) {
+      safeStorageSet(key, JSON.stringify(backup));
+      return backup;
+    }
     return fallback;
+  } catch {
+    const backup = loadBackupValue(key);
+    return backup !== undefined ? backup : fallback;
   }
+}
+
+function safeStorageGet(key) {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function safeStorageSet(key, value) {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // Storage may be blocked in private mode; keep the page usable.
+  }
+}
+
+function loadBackupValue(key) {
+  try {
+    const backup = JSON.parse(safeStorageGet(DATA_BACKUP_KEY) || "{}");
+    return Object.prototype.hasOwnProperty.call(backup, key) ? backup[key] : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function saveDataBackup() {
+  safeStorageSet(DATA_BACKUP_KEY, JSON.stringify({
+    [ORDER_STORAGE_KEY]: orders,
+    [ADJUST_STORAGE_KEY]: adjustments,
+    [REPORTED_STORAGE_KEY]: reported,
+    [RISK_SETTINGS_KEY]: riskSettings,
+    [CUSTOMER_KEY]: customers,
+    savedAt: new Date().toISOString()
+  }));
 }
 
 function normalizeRiskSettings(settings) {
@@ -221,7 +267,8 @@ function riskLimitForRegion(region) {
 
 function setRiskLimitForRegion(region, limit) {
   riskSettings.limitByRegion = { ...(riskSettings.limitByRegion || {}), [region]: Number(limit || 0) };
-  localStorage.setItem(RISK_SETTINGS_KEY, JSON.stringify(riskSettings));
+  safeStorageSet(RISK_SETTINGS_KEY, JSON.stringify(riskSettings));
+  saveDataBackup();
 }
 
 function normalizeCustomer(customer) {
@@ -429,11 +476,12 @@ function saveCustomerSettings() {
 }
 
 function saveAll() {
-  localStorage.setItem(ORDER_STORAGE_KEY, JSON.stringify(orders));
-  localStorage.setItem(ADJUST_STORAGE_KEY, JSON.stringify(adjustments));
-  localStorage.setItem(REPORTED_STORAGE_KEY, JSON.stringify(reported));
-  localStorage.setItem(RISK_SETTINGS_KEY, JSON.stringify(riskSettings));
-  localStorage.setItem(CUSTOMER_KEY, JSON.stringify(customers));
+  safeStorageSet(ORDER_STORAGE_KEY, JSON.stringify(orders));
+  safeStorageSet(ADJUST_STORAGE_KEY, JSON.stringify(adjustments));
+  safeStorageSet(REPORTED_STORAGE_KEY, JSON.stringify(reported));
+  safeStorageSet(RISK_SETTINGS_KEY, JSON.stringify(riskSettings));
+  safeStorageSet(CUSTOMER_KEY, JSON.stringify(customers));
+  saveDataBackup();
   $("lastSaved").textContent = "注单仅本机保存";
 }
 
