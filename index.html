@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
@@ -9,67 +9,67 @@
   <body>
     <section id="licenseGate" class="license-gate" hidden>
       <div class="license-hero">
-        <div class="license-mark">鍗?/div>
+        <div class="license-mark">单</div>
       </div>
       <div class="license-card">
-        <div class="license-icon">楼</div>
-        <h1>鏀跺崟鍔╂墜</h1>
-        <p>绉佸瘑褰曞崟 路 鍗冲紑鍗虫竻</p>
-        <label>婵€娲荤爜 / LICENSE KEY
-          <input id="licenseInput" autocomplete="off" placeholder="杈撳叆婵€娲荤爜" />
+        <div class="license-icon">¥</div>
+        <h1>收单助手</h1>
+        <p>私密录单 · 即开即清</p>
+        <label>激活码 / LICENSE KEY
+          <input id="licenseInput" autocomplete="off" placeholder="输入激活码" />
         </label>
         <label class="license-remember">
           <input id="rememberLicense" type="checkbox" checked />
-          <span>璁颁綇婵€娲荤爜</span>
+          <span>记住激活码</span>
         </label>
-        <button id="activateBtn" type="button">绔嬪嵆楠岃瘉 鈫?/button>
-        <button id="copyDeviceBtn" class="plain" type="button">澶嶅埗璁惧璇嗗埆鐮?/button>
+        <button id="activateBtn" type="button">立即验证 →</button>
+        <button id="copyDeviceBtn" class="plain" type="button">复制设备识别码</button>
         <div id="licenseMessage" class="license-message"></div>
-        <div class="device-code">璁惧璇嗗埆鐮?<b id="deviceCodeText"></b></div>
+        <div class="device-code">设备识别码 <b id="deviceCodeText"></b></div>
       </div>
     </section>
 
     <header class="app-header">
       <div>
         <h1>Fortune AI Analytics MVP</h1>
-        <p>鎴戣褰曞崟銆佸紑濂栫畻濂栥€佺壒鐮佽皟鍗曟ā鎷?/p>
-        <span class="privacy-badge">闅愮妯″紡锛氭敞鍗曚粎鏈満娴忚鍣ㄤ繚瀛?/span>
+        <p>我要录单、开奖算奖、特码调单模拟</p>
+        <span class="privacy-badge">隐私模式：注单仅本机浏览器保存</span>
       </div>
       <div class="header-actions">
-        <button id="openCustomerDialogBtn" type="button" onclick="document.getElementById('customerDialog').showModal()">瀹㈡埛绠＄悊</button>
-        <button id="openEntryToolsBtn" type="button" onclick="FortuneApp.openEntryTools()">杈呭姪鍔熻兘</button>
-        <button id="clearOrdersBtn" class="danger" type="button" onclick="FortuneApp.clearOrders()">鍒犻櫎鍏ㄩ儴娉ㄥ崟</button>
+        <button id="openCustomerDialogBtn" type="button" onclick="document.getElementById('customerDialog').showModal()">客户管理</button>
+        <button id="openEntryToolsBtn" type="button" onclick="FortuneApp.openEntryTools()">辅助功能</button>
+        <button id="clearOrdersBtn" class="danger" type="button" onclick="FortuneApp.clearOrders()">删除全部注单</button>
       </div>
     </header>
 
     <dialog id="customerDialog" class="settings-dialog">
       <div class="dialog-head">
         <div>
-          <h2>瀹㈡埛绠＄悊</h2>
-          <p id="customerSettingsStatus">閫夋嫨瀹㈡埛鍚庡彲淇敼淇濆瓨</p>
+          <h2>客户管理</h2>
+          <p id="customerSettingsStatus">选择客户后可修改保存</p>
         </div>
         <form method="dialog">
-          <button class="plain" type="submit">鍏抽棴</button>
+          <button class="plain" type="submit">关闭</button>
         </form>
       </div>
       <div class="customer-create-panel">
-        <h3>鏂板缓瀹㈡埛</h3>
+        <h3>新建客户</h3>
         <div class="customer-create-row">
-          <input id="customerNameInput" placeholder="瀹㈡埛鍚嶇О" />
-          <button id="addCustomerBtn" type="button" onclick="FortuneApp.addCustomer()">鏂板缓瀹㈡埛</button>
+          <input id="customerNameInput" placeholder="客户名称" />
+          <button id="addCustomerBtn" type="button" onclick="FortuneApp.addCustomer()">新建客户</button>
         </div>
       </div>
       <details class="settings-tools" open>
         <summary>
-          <span>瀹㈡埛璧旂巼璁剧疆</span>
-          <small>鎸夊鎴峰崟鐙缃禂鐜囧拰杩旀按</small>
+          <span>客户赔率设置</span>
+          <small>按客户单独设置赔率和返水</small>
         </summary>
           <div class="customer-settings-body">
             <div class="customer-settings-head">
-              <label>瀹㈡埛
+              <label>客户
                 <select id="settingsCustomer"></select>
               </label>
-              <button id="saveCustomerSettingsBtn" type="button" onclick="FortuneApp.saveCustomerSettings()">淇濆瓨璁剧疆</button>
+              <button id="saveCustomerSettingsBtn" type="button" onclick="FortuneApp.saveCustomerSettings()">保存设置</button>
             </div>
             <div id="customerOddsGrid" class="odds-grid"></div>
           </div>
@@ -79,55 +79,55 @@
     <main class="layout">
       <section class="panel order-entry">
         <div class="panel-title">
-          <h2>鎴戣褰曞崟</h2>
-          <span id="parseStatus">绛夊緟杈撳叆</span>
+          <h2>我要录单</h2>
+          <span id="parseStatus">等待输入</span>
         </div>
         <div class="entry-folders">
           <details id="entryTools" class="entry-tools">
-            <summary>杈呭姪鍔熻兘</summary>
+            <summary>辅助功能</summary>
             <div class="entry-tools-grid">
               <div>
-                <h3>甯姪</h3>
+                <h3>帮助</h3>
                 <div class="help-content">
-                  <p>鍏堥€夊鎴凤紝鍐嶇矘璐存敞鍗曘€傜郴缁熶細鎸夆€滃尯鍩熴€佺帺娉曘€佸唴瀹广€侀噾棰濃€濈殑椤哄簭鎷嗘垚琛ㄦ牸锛岃〃鏍奸噷鐨勭帺娉曘€佸彿鐮併€侀噾棰濄€佽禂鐜囬兘鍙互鍐嶆墜鍔ㄦ敼銆?/p>
-                  <p>鏁板瓧鐢ㄧ偣銆佺┖鏍笺€侀€楀彿銆佹枩鏉犮€佺瓑鍙烽殧寮€閮藉敖閲忔寜鈥滃悇涓暟鈥濆鐞嗭紝渚嬪 14.35.22 鍚?0 浼氭媶鎴?14銆?5銆?2锛屾瘡涓?20銆?/p>
-                  <p>涓€琛岄噷鍑虹幇澶氫釜閲戦鏃讹紝浼氭寜鍓嶉潰鐨勫彿鐮佹鍒嗗埆鎷嗗紑锛涘墠闈㈠嚑娈垫病鏈夐噾棰濄€佸悗闈㈠嚭鐜扳€滃悇20/涓暟20/20鏂も€濇椂锛屽墠闈㈡涔熶細鍏堝～ 20锛屾柟渚垮啀鏍稿淇敼銆?/p>
-                  <p>绾㈡尝銆佽摑娉€佺豢娉€佺孩鍗曘€佺孩鍙屻€佽摑鍗曘€佽摑鍙屻€佺豢鍗曘€佺豢鍙屼細鐩存帴灞曞紑鎴愬搴斿彿鐮侊紱杩炶倴浼氫繚鐣欎负杩炶倴鐜╂硶锛岀敤瀹㈡埛璧旂巼閲岀殑甯︿富/鏃犱富璁剧疆銆?/p>
-                  <p>鍥剧墖璇嗗埆鍙礋璐ｆ妸鍥剧墖鏂囧瓧鏀捐繘褰曞崟妗嗭紝璇嗗埆鍚庡厛鐢卞鎴锋牳瀵规枃瀛楋紝鍐嶇偣瑙ｆ瀽銆備竴鑲栭闄╃粺璁′細鎸?12 涓敓鑲栨眹鎬诲綋鍓嶉〉闈㈤噾棰濄€?/p>
-                  <p>涓瑙勫垯锛氫竴鑲栥€佷富鑲栫湅 7 涓紑濂栧彿鐮侀噷鏄惁鏈夊搴旂敓鑲栵紱浜岃繛鑲栧埌浜旇繛鑲栬姹備笅娉ㄧ敓鑲栧叏閮ㄥ湪 7 涓悆閲屽嚭鐜般€?/p>
-                  <p>骞冲熬鐪?7 涓悆灏炬暟锛涗簩杩炲熬鍒颁簲杩炲熬瑕佹眰涓嬫敞灏炬暟鍏ㄩ儴鍦?7 涓悆閲屽嚭鐜般€備簲涓嶄腑鍒板崄涓嶄腑瑕佹眰 7 涓悆閲屼竴涓笅娉ㄥ彿鐮侀兘娌℃湁銆?/p>
-                  <p>浜屼腑浜屻€佷笁涓笁鍙湅鍓?6 涓钩鐮侊紝涓嬫敞鍙风爜鍏ㄩ儴瀵瑰簲涓婃墠涓€傜壒涓茶姹傚墠 6 涓钩鐮侀噷鏈変竴涓懡涓紝鍚屾椂绗?7 涓壒鐮佷篃鍛戒腑銆?/p>
+                  <p>先选客户，再粘贴注单。系统会按“区域、玩法、内容、金额”的顺序拆成表格，表格里的玩法、号码、金额、赔率都可以再手动改。</p>
+                  <p>数字用点、空格、逗号、斜杠、等号隔开都尽量按“各个数”处理，例如 14.35.22 各20 会拆成 14、35、22，每个 20。</p>
+                  <p>一行里出现多个金额时，会按前面的号码段分别拆开；前面几段没有金额、后面出现“各20/个数20/20斤”时，前面段也会先填 20，方便再核对修改。</p>
+                  <p>红波、蓝波、绿波、红单、红双、蓝单、蓝双、绿单、绿双会直接展开成对应号码；连肖会保留为连肖玩法，用客户赔率里的带主/无主设置。</p>
+                  <p>图片识别只负责把图片文字放进录单框，识别后先由客户核对文字，再点解析。一肖风险统计会按 12 个生肖汇总当前页面金额。</p>
+                  <p>中奖规则：一肖、主肖看 7 个开奖号码里是否有对应生肖；二连肖到五连肖要求下注生肖全部在 7 个球里出现。</p>
+                  <p>平尾看 7 个球尾数；二连尾到五连尾要求下注尾数全部在 7 个球里出现。五不中到十不中要求 7 个球里一个下注号码都没有。</p>
+                  <p>二中二、三中三只看前 6 个平码，下注号码全部对应上才中。特串要求前 6 个平码里有一个命中，同时第 7 个特码也命中。</p>
                 </div>
               </div>
             </div>
           </details>
         </div>
-        <textarea id="orderInput" spellcheck="false" placeholder="绀轰緥锛氭境闂?鐗圭爜 06 08 鍚勬暟 50&#10;娓?鐗硅倴 榧犵墰 鍚勮倴 20&#10;婢抽棬 骞冲熬 5灏?9灏?鍚?100"></textarea>
+        <textarea id="orderInput" spellcheck="false" placeholder="示例：澳门 特码 06 08 各数 50&#10;港 特肖 鼠牛 各肖 20&#10;澳门 平尾 5尾 9尾 各 100"></textarea>
         <div class="toolbar">
           <select id="defaultRegion">
-            <option value="婢抽棬">榛樿婢抽棬</option>
-            <option value="棣欐腐">榛樿棣欐腐</option>
+            <option value="澳门">默认澳门</option>
+            <option value="香港">默认香港</option>
           </select>
           <select id="entryCustomer"></select>
-          <label class="file-button" for="imageOcrInput">璇嗗埆鍥剧墖鏂囧瓧</label>
+          <label class="file-button" for="imageOcrInput">识别图片文字</label>
           <input id="imageOcrInput" type="file" accept="image/*" />
-          <button id="parseBtn" type="button" onclick="FortuneApp.parseOrders()">瑙ｆ瀽娉ㄥ崟</button>
-          <button id="saveParsedBtn" type="button" onclick="FortuneApp.saveParsed()">鍏ュ簱</button>
-          <button id="clearInputBtn" type="button" onclick="FortuneApp.clearInput()">娓呯┖杈撳叆</button>
+          <button id="parseBtn" type="button" onclick="FortuneApp.parseOrders()">解析注单</button>
+          <button id="saveParsedBtn" type="button" onclick="FortuneApp.saveParsed()">入库</button>
+          <button id="clearInputBtn" type="button" onclick="FortuneApp.clearInput()">清空输入</button>
           <span id="ocrStatus" class="toolbar-status"></span>
         </div>
         <div class="table-wrap parsed-table">
           <table>
             <thead>
               <tr>
-                <th>鍖哄煙</th>
-                <th>鐜╂硶</th>
-                <th>鍐呭</th>
-                <th>閲戦</th>
-                <th>璧旂巼</th>
-                <th>鎬婚</th>
-                <th>鎻愮ず</th>
-                <th>鎿嶄綔</th>
+                <th>区域</th>
+                <th>玩法</th>
+                <th>内容</th>
+                <th>金额</th>
+                <th>赔率</th>
+                <th>总额</th>
+                <th>提示</th>
+                <th>操作</th>
               </tr>
             </thead>
             <tbody id="parsedRows"></tbody>
@@ -135,8 +135,8 @@
         </div>
         <div class="zodiac-risk-box">
           <div class="panel-title compact">
-            <h3>涓€鑲栭闄╃粺璁?/h3>
-            <span id="zodiacRiskSummary">12 涓敓鑲栫疮璁￠噾棰?/span>
+            <h3>一肖风险统计</h3>
+            <span id="zodiacRiskSummary">12 个生肖累计金额</span>
           </div>
           <div id="zodiacRiskRows" class="zodiac-grid"></div>
         </div>
@@ -144,84 +144,87 @@
 
       <section class="panel stats-panel">
         <div class="panel-title">
-          <h2>鏁版嵁鎬昏</h2>
-          <span id="lastSaved">娉ㄥ崟浠呮湰鏈轰繚瀛?/span>
+          <h2>数据总览</h2>
+          <span id="lastSaved">注单仅本机保存</span>
         </div>
         <div class="stats-grid">
-          <div><b id="totalOrders">0</b><span>鎬绘敞鍗曟暟</span></div>
-          <div><b id="totalAmount">0</b><span>鎬婚噾棰?/span></div>
-          <div><b id="winAmount">0</b><span>涓閲戦</span></div>
-          <div><b id="netProfit">0</b><span>鍑€鐩堜簭</span></div>
+          <div><b id="totalOrders">0</b><span>总注单数</span></div>
+          <div><b id="totalAmount">0</b><span>总金额</span></div>
+          <div><b id="winAmount">0</b><span>中奖金额</span></div>
+          <div><b id="netProfit">0</b><span>净盈亏</span></div>
         </div>
         <div id="typeStats" class="mini-list"></div>
       </section>
 
       <section class="panel draw-panel">
         <div class="panel-title">
-          <h2>寮€濂栫畻濂?/h2>
-          <span>绗?7 鐞冧负鐗圭爜</span>
+          <h2>开奖算奖</h2>
+          <span>第 7 球为特码</span>
         </div>
         <div class="form-grid">
-          <label>鍖哄煙
+          <label>区域
             <select id="drawRegion">
-              <option value="婢抽棬">婢抽棬</option>
-              <option value="棣欐腐">棣欐腐</option>
+              <option value="澳门">澳门</option>
+              <option value="香港">香港</option>
             </select>
           </label>
-          <label>鏈熷彿
-            <input id="drawPeriod" placeholder="渚嬪 2026175" />
+          <label>期号
+            <input id="drawPeriod" placeholder="例如 2026175" />
           </label>
-          <label>寮€濂栧彿鐮?            <input id="drawNumbers" placeholder="7 涓彿鐮侊紝渚嬪 01 02 03 04 05 06 07" />
+          <label>开奖号码
+            <input id="drawNumbers" placeholder="7 个号码，例如 01 02 03 04 05 06 07" />
           </label>
         </div>
         <div class="toolbar">
-          <button id="fetchLatestDrawBtn" type="button" onclick="FortuneApp.fetchLatestDraw()">鎷夊彇鏈€鏂板紑濂?/button>
-          <button id="settleBtn" type="button" onclick="FortuneApp.settleOrders()">鎵ц绠楀</button>
-          <button id="clearSettlementBtn" type="button" onclick="FortuneApp.clearSettlement()">娓呯┖绠楀鐘舵€?/button>
+          <button id="fetchLatestDrawBtn" type="button" onclick="FortuneApp.fetchLatestDraw()">拉取最新开奖</button>
+          <button id="settleBtn" type="button" onclick="FortuneApp.settleOrders()">执行算奖</button>
+          <button id="clearSettlementBtn" type="button" onclick="FortuneApp.clearSettlement()">清空算奖状态</button>
         </div>
-        <div id="drawSummary" class="summary-line">灏氭湭寮€濂?/div>
+        <div id="drawSummary" class="summary-line">尚未开奖</div>
       </section>
 
       <section class="panel risk-panel">
         <div class="panel-title">
-          <h2>鐗圭爜璋冨崟</h2>
-          <span id="riskSummary">绛夊緟娉ㄥ崟</span>
+          <h2>特码调单</h2>
+          <span id="riskSummary">等待注单</span>
         </div>
         <div class="risk-controls">
-          <label>鍖哄煙
+          <label>区域
             <select id="riskRegion">
-              <option value="婢抽棬">婢抽棬</option>
-              <option value="棣欐腐">棣欐腐</option>
+              <option value="澳门">澳门</option>
+              <option value="香港">香港</option>
             </select>
           </label>
-          <label>璋冨崟璧旂巼
+          <label>调单赔率
             <input id="adjustOdds" type="number" value="47" min="1" step="0.1" />
           </label>
-          <label>鏅鸿兘鎺ㄨ崘闃堝€?            <input id="adjustRebate" type="hidden" value="0" />
-            <button id="smartRiskLimitBtn" class="smart-limit-btn" type="button">璁＄畻骞跺～鍏?/button>
-            <small id="smartRiskLimitText">鎸夊綋鍓嶇洏鍙ｆ帹鑽?/small>
+          <label>智能推荐阈值
+            <input id="adjustRebate" type="hidden" value="0" />
+            <button id="smartRiskLimitBtn" class="smart-limit-btn" type="button">计算并填入</button>
+            <small id="smartRiskLimitText">按当前盘口推荐</small>
           </label>
-          <label>鐣欓闃堝€?            <input id="riskLimit" type="number" value="0" min="0" step="1" />
+          <label>留额阈值
+            <input id="riskLimit" type="number" value="0" min="0" step="1" />
           </label>
         </div>
         <div class="risk-extremes">
-          <div><span>鏈€澶х泩鍒?/span><b id="maxProfit">0</b></div>
-          <div><span>鏈€澶т簭鎹?/span><b id="maxLoss">0</b></div>
-          <div><span>鐗圭爜鏍稿</span><b id="specialRiskCheck">0 / 0</b></div>
+          <div><span>最大盈利</span><b id="maxProfit">0</b></div>
+          <div><span>最大亏损</span><b id="maxLoss">0</b></div>
+          <div><span>特码核对</span><b id="specialRiskCheck">0 / 0</b></div>
         </div>
         <div class="risk-workspace">
           <div class="table-wrap risk-table">
             <table>
               <thead>
                 <tr>
-                  <th>鍙?/th>
-                  <th>鐢熻倴</th>
-                  <th>鍘熼噾棰?/th>
-                  <th>鏉ユ簮</th>
-                  <th>璋冩暣</th>
-                  <th>鎬昏</th>
-                  <th>瓒呭嚭</th>
-                  <th>闃堝€煎悗鐩堜簭</th>
+                  <th>号</th>
+                  <th>生肖</th>
+                  <th>原金额</th>
+                  <th>来源</th>
+                  <th>调整</th>
+                  <th>总计</th>
+                  <th>超出</th>
+                  <th>阈值后盈亏</th>
                 </tr>
               </thead>
               <tbody id="riskRows"></tbody>
@@ -229,22 +232,22 @@
           </div>
           <aside class="report-panel">
             <div class="panel-title compact">
-              <h3>寰呬笂鎶ュ垪琛?/h3>
+              <h3>待上报列表</h3>
               <div class="report-actions">
-                <button id="copyReportBtn" class="plain" type="button" onclick="FortuneApp.copyReportList()">涓€閿鍒?/button>
-                <button id="markReportedBtn" class="plain" type="button" onclick="FortuneApp.markReportSubmitted()">宸蹭笂鎶?/button>
-                <button id="clearReportedBtn" class="plain danger-text" type="button" onclick="FortuneApp.clearReportedList()">娓呯┖宸蹭笂鎶?/button>
+                <button id="copyReportBtn" class="plain" type="button" onclick="FortuneApp.copyReportList()">一键复制</button>
+                <button id="markReportedBtn" class="plain" type="button" onclick="FortuneApp.markReportSubmitted()">已上报</button>
+                <button id="clearReportedBtn" class="plain danger-text" type="button" onclick="FortuneApp.clearReportedList()">清空已上报</button>
               </div>
             </div>
-            <textarea id="reportText" readonly placeholder="瓒呰繃鐣欓鍚庤嚜鍔ㄧ敓鎴愶紝渚嬪锛?3=365"></textarea>
+            <textarea id="reportText" readonly placeholder="超过留额后自动生成，例如：33=365"></textarea>
             <div class="table-wrap risk-table report-table">
               <table>
                 <thead>
                   <tr>
-                    <th>鍙?/th>
-                    <th>鎬昏</th>
-                    <th>宸蹭笂鎶?/th>
-                    <th>寰呬笂鎶?/th>
+                    <th>号</th>
+                    <th>总计</th>
+                    <th>已上报</th>
+                    <th>待上报</th>
                   </tr>
                 </thead>
                 <tbody id="reportRows"></tbody>
@@ -252,17 +255,17 @@
             </div>
           </aside>
         </div>
-        <h3>瀹㈡埛缁撶畻鍖?/h3>
+        <h3>客户结算区</h3>
         <div class="table-wrap settlement-table">
           <table>
             <thead>
               <tr>
-                <th>瀹㈡埛</th>
-                <th>娉ㄥ崟鏁?/th>
-                <th>鎬婚噾棰?/th>
-                <th>涓</th>
-                <th>杩旀按</th>
-                <th>鍑€缁撶畻</th>
+                <th>客户</th>
+                <th>注单数</th>
+                <th>总金额</th>
+                <th>中奖</th>
+                <th>返水</th>
+                <th>净结算</th>
               </tr>
             </thead>
             <tbody id="customerSettlementRows"></tbody>
@@ -272,25 +275,25 @@
 
       <section class="panel orders-panel">
         <div class="panel-title">
-          <h2>娉ㄥ崟璇︽儏</h2>
-          <input id="orderSearch" placeholder="鎼滅储鍖哄煙銆佺帺娉曘€佸唴瀹? />
+          <h2>注单详情</h2>
+          <input id="orderSearch" placeholder="搜索区域、玩法、内容" />
         </div>
         <div class="table-wrap orders-table">
           <table>
             <thead>
               <tr>
-                <th>鏃堕棿</th>
-                <th>瀹㈡埛</th>
-                <th>鍖哄煙</th>
-                <th>鐜╂硶</th>
-                <th>鍐呭</th>
-                <th>閲戦</th>
-                <th>璧旂巼</th>
-                <th>杩旀按</th>
-                <th>鎬婚</th>
-                <th>鐘舵€?/th>
-                <th>鐩堜簭</th>
-                <th>鎿嶄綔</th>
+                <th>时间</th>
+                <th>客户</th>
+                <th>区域</th>
+                <th>玩法</th>
+                <th>内容</th>
+                <th>金额</th>
+                <th>赔率</th>
+                <th>返水</th>
+                <th>总额</th>
+                <th>状态</th>
+                <th>盈亏</th>
+                <th>操作</th>
               </tr>
             </thead>
             <tbody id="orderRows"></tbody>
@@ -302,4 +305,3 @@
     <script src="./main.js?v=20260630_slash_amount_fix"></script>
   </body>
 </html>
-
