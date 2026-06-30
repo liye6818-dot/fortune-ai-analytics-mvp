@@ -881,6 +881,57 @@ label {
   font-size: 18px;
 }
 
+.combo-risk-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.combo-risk-title {
+  color: var(--text);
+  font-weight: 800;
+}
+
+.combo-risk-empty {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.combo-risk-item {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px 10px;
+  align-items: center;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.combo-risk-item span {
+  min-width: 0;
+  color: var(--muted);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.combo-risk-item b {
+  font-size: 17px;
+}
+
+.combo-risk-item em {
+  grid-column: 1 / -1;
+  color: var(--warn);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.combo-risk-warn {
+  border-color: #f3c46a;
+  background: #fffaf0;
+}
+
 .ok {
   color: var(--ok);
 }
@@ -1529,20 +1580,23 @@ label {
   .orders-panel {
     display: block;
     margin-top: -2px;
+    padding: 10px 8px;
   }
 
   .orders-panel .panel-title {
     align-items: center;
-    margin-bottom: 6px;
+    margin-bottom: 4px;
   }
 
   .orders-panel .panel-title h2 {
-    font-size: 15px;
+    font-size: 14px;
   }
 
   .orders-panel #orderSearch {
-    min-height: 32px;
-    font-size: 13px;
+    max-width: 170px;
+    min-height: 28px;
+    padding: 4px 8px;
+    font-size: 12px;
   }
 
   .parsed-table,
@@ -1616,12 +1670,13 @@ label {
   .orders-table table {
     min-width: 0 !important;
     table-layout: fixed;
-    font-size: 11px;
+    font-size: 10.5px;
   }
 
   .orders-table th,
   .orders-table td {
-    padding: 4px 3px !important;
+    padding: 3px 2px !important;
+    line-height: 1.15;
   }
 
   .orders-table th:nth-child(1),
@@ -1664,6 +1719,14 @@ label {
   .orders-table .order-edit-number {
     width: 100% !important;
     min-width: 0 !important;
+    min-height: 24px !important;
+    padding: 1px 3px !important;
+  }
+
+  #ordersPanel .orders-table {
+    max-height: 190px !important;
+    overflow: auto !important;
+    border-radius: 7px;
   }
 
   .risk-workspace > .risk-table table {

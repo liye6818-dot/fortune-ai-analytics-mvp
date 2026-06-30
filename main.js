@@ -388,6 +388,29 @@ function expandZodiacComboOrder(order) {
   });
 }
 
+function expandMainZodiacSingles(order) {
+  if (!["特肖", "平肖", "一肖"].includes(order?.type)) return [order];
+  const targets = uniqueTargets((order.targets || []).filter((target) => zodiacOrder.includes(String(target))));
+  if (!targets.includes(currentYearZodiac)) return [order];
+  const otherTargets = targets.filter((target) => target !== currentYearZodiac);
+  const mainOrder = {
+    ...order,
+    id: otherTargets.length ? makeId() : order.id,
+    type: "主肖",
+    targets: [currentYearZodiac],
+    hint: "主肖已独立套用赔率返水"
+  };
+  updateOrderTotal(mainOrder);
+  if (!otherTargets.length) return [mainOrder];
+  const otherOrder = {
+    ...order,
+    targets: otherTargets,
+    hint: "已拆出主肖"
+  };
+  updateOrderTotal(otherOrder);
+  return [otherOrder, mainOrder];
+}
+
 function applyCustomerDefaults(order, customer = currentCustomer()) {
   order.customerId = customer.id;
   order.customerName = customer.name;
@@ -1417,6 +1440,7 @@ function parseOrders() {
   const customer = currentCustomer();
   parsed = parseInputText($("orderInput").value, $("defaultRegion").value)
     .flatMap(expandZodiacComboOrder)
+    .flatMap(expandMainZodiacSingles)
     .map((order) => applyCustomerDefaults(order, customer));
   renderParsed();
   renderDeferred();
@@ -1646,7 +1670,7 @@ function updateParsedFromEdit(event) {
     order.odds = customerOdds(customer, order);
     order.rebate = customerRebate(customer, order);
   }
-  const expandedOrders = expandZodiacComboOrder(order);
+  const expandedOrders = expandZodiacComboOrder(order).flatMap(expandMainZodiacSingles);
   if (expandedOrders.length > 1) {
     parsed.splice(index, 1, ...expandedOrders.map((item) => applyCustomerDefaults(item, customer)));
   }
@@ -1676,6 +1700,35 @@ function orderZodiacExposure(order) {
   return rows;
 }
 
+function comboSchemeKey(order) {
+  const targets = uniqueTargets(order.targets || []).map(String).sort((a, b) => a.localeCompare(b, "zh-Hans"));
+  return [order.region || "", order.type || "", targets.join(" ")].join("|");
+}
+
+function comboSchemeLabel(order) {
+  const targets = uniqueTargets(order.targets || []).map(String).join(" ");
+  return `${order.region || ""} ${order.type || ""} ${targets}`.trim();
+}
+
+function comboRiskRows(sourceOrders) {
+  const groups = new Map();
+  sourceOrders
+    .filter((order) => isZodiacComboType(order.type))
+    .forEach((order) => {
+      const key = comboSchemeKey(order);
+      const current = groups.get(key) || {
+        label: comboSchemeLabel(order),
+        total: 0,
+        count: 0
+      };
+      current.total += Number(order.total || order.amount || 0);
+      current.count += 1;
+      groups.set(key, current);
+    });
+  return [...groups.values()]
+    .sort((a, b) => (b.count - a.count) || (b.total - a.total) || a.label.localeCompare(b.label, "zh-Hans"));
+}
+
 function renderZodiacRisk() {
   const totals = Object.fromEntries(zodiacOrder.map((zodiac) => [zodiac, 0]));
   const sourceOrders = [
@@ -1695,6 +1748,20 @@ function renderZodiacRisk() {
       <b>${money(totals[zodiac])}</b>
     </div>
   `).join("");
+  const comboRows = comboRiskRows(sourceOrders);
+  const comboBox = $("comboRiskRows");
+  if (comboBox) {
+    comboBox.innerHTML = comboRows.length ? `
+      <div class="combo-risk-title">连肖方案汇总</div>
+      ${comboRows.map((row) => `
+        <div class="combo-risk-item ${row.count > 1 ? "combo-risk-warn" : ""}">
+          <span>${htmlEscape(row.label)}</span>
+          <b>${money(row.total)}</b>
+          ${row.count > 1 ? `<em>重复 ${row.count} 笔，金额已合并，注意风险</em>` : ""}
+        </div>
+      `).join("")}
+    ` : `<div class="combo-risk-empty">暂无连肖方案</div>`;
+  }
 }
 
 function renderDeferred() {
