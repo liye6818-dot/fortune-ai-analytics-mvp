@@ -5,6 +5,43 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>财神爷录单宝</title>
     <link rel="stylesheet" href="./styles.css?v=20260701_mobile_delete_action" />
+    <style>
+      @media (max-width: 640px) {
+        .orders-table th:nth-child(11),
+        .orders-table td:nth-child(11) {
+          display: none !important;
+        }
+
+        .orders-table th:nth-child(12),
+        .orders-table td:nth-child(12) {
+          display: table-cell !important;
+          width: 34px !important;
+        }
+
+        .orders-table th:nth-child(5),
+        .orders-table td:nth-child(5) {
+          width: 84px !important;
+        }
+
+        .orders-table th:nth-child(6),
+        .orders-table td:nth-child(6),
+        .orders-table th:nth-child(7),
+        .orders-table td:nth-child(7),
+        .orders-table th:nth-child(8),
+        .orders-table td:nth-child(8),
+        .orders-table th:nth-child(9),
+        .orders-table td:nth-child(9) {
+          width: 42px !important;
+        }
+
+        .orders-table .order-delete {
+          min-height: 24px;
+          padding: 2px 4px;
+          border-radius: 6px;
+          font-size: 12px;
+        }
+      }
+    </style>
   </head>
   <body>
     <section id="licenseGate" class="license-gate" hidden>
