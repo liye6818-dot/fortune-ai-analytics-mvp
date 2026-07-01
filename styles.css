@@ -1630,18 +1630,15 @@ label {
   }
 
   .parsed-table th:nth-child(1),
-  .parsed-table td:nth-child(1) {
-    width: 48px;
-  }
-
+  .parsed-table td:nth-child(1),
   .parsed-table th:nth-child(2),
   .parsed-table td:nth-child(2) {
-    width: 56px;
+    display: none;
   }
 
   .parsed-table th:nth-child(3),
   .parsed-table td:nth-child(3) {
-    width: auto;
+    width: 42%;
   }
 
   .parsed-table th:nth-child(4),
@@ -1650,7 +1647,7 @@ label {
   .parsed-table td:nth-child(5),
   .parsed-table th:nth-child(6),
   .parsed-table td:nth-child(6) {
-    width: 44px;
+    width: 19%;
   }
 
   .parsed-table th:nth-child(7),
