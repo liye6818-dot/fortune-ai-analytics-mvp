@@ -2362,6 +2362,14 @@ function closeMobilePanels() {
   });
 }
 
+function playDrawBlessingOnce() {
+  const video = $("drawBlessingVideo");
+  if (!video) return;
+  video.muted = true;
+  video.currentTime = 0;
+  video.play().catch(() => {});
+}
+
 function openMobilePanel(name) {
   closeMobilePanels();
   let target = null;
@@ -2384,6 +2392,7 @@ function openMobilePanel(name) {
   if (!target) return;
   document.body.classList.add("mobile-panel-active");
   target.classList.add("mobile-panel-open");
+  if (name === "draw") playDrawBlessingOnce();
 }
 
 window.FortuneApp = {
@@ -2454,18 +2463,9 @@ function clearInput() {
 }
 
 function bindDrawBlessingVideo() {
-  const details = $("drawBlessing");
   const video = $("drawBlessingVideo");
-  if (!details || !video) return;
-  details.addEventListener("toggle", () => {
-    if (details.open) {
-      video.currentTime = 0;
-      video.play().catch(() => {});
-    } else {
-      video.pause();
-      video.currentTime = 0;
-    }
-  });
+  if (!video) return;
+  playDrawBlessingOnce();
   video.addEventListener("ended", () => {
     video.pause();
   });

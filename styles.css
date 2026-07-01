@@ -817,14 +817,6 @@ label {
   overflow: hidden;
 }
 
-.draw-blessing summary {
-  cursor: pointer;
-  padding: 9px 12px;
-  color: var(--ink);
-  font-size: 14px;
-  font-weight: 800;
-}
-
 .draw-blessing video {
   display: block;
   width: 100%;
