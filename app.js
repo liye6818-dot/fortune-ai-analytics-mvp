@@ -2452,8 +2452,27 @@ function clearInput() {
   renderParsed();
   renderDeferred();
 }
+
+function bindDrawBlessingVideo() {
+  const details = $("drawBlessing");
+  const video = $("drawBlessingVideo");
+  if (!details || !video) return;
+  details.addEventListener("toggle", () => {
+    if (details.open) {
+      video.currentTime = 0;
+      video.play().catch(() => {});
+    } else {
+      video.pause();
+      video.currentTime = 0;
+    }
+  });
+  video.addEventListener("ended", () => {
+    video.pause();
+  });
+}
 populateDefaultTypeSelect();
 bindControls();
+bindDrawBlessingVideo();
 on("riskRegion", "change", changeRiskRegion);
 on("adjustOdds", "input", renderRisk);
 on("adjustRebate", "input", renderRisk);

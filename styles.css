@@ -809,6 +809,29 @@ label {
   margin-top: 4px;
 }
 
+.draw-blessing {
+  margin-top: 10px;
+  border: 1px solid #f1d4a8;
+  border-radius: 8px;
+  background: #fffaf0;
+  overflow: hidden;
+}
+
+.draw-blessing summary {
+  cursor: pointer;
+  padding: 9px 12px;
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.draw-blessing video {
+  display: block;
+  width: 100%;
+  max-height: 360px;
+  background: #111827;
+}
+
 .report-table {
   margin-top: 8px;
   margin-bottom: 12px;
