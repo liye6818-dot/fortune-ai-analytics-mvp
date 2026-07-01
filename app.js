@@ -648,7 +648,7 @@ function isDeferredLine(line) {
   return deferredKeywords.some((keyword) => String(line || "").includes(keyword));
 }
 
-function detectType(line) {
+function detectType(line, fallbackType = "特码") {
   const zodiacs = zodiacMatches(line);
   if (/二连肖|二连/.test(line) && zodiacs.length) return "二连肖";
   if (/三连肖|三连/.test(line) && zodiacs.length) return "三连肖";
@@ -675,7 +675,7 @@ function detectType(line) {
   if (/平尾/.test(line)) return "平尾";
   if (/半波|红波|蓝波|绿波|波色|红大|红小|蓝大|蓝小|绿大|绿小|红单|蓝单|绿单|红双|蓝双|绿双/.test(line)) return "特码";
   if (/[大小单双]/.test(line) && /两面|特码/.test(line)) return "两面";
-  return "特码";
+  return fallbackType || "特码";
 }
 
 function detectAmount(line) {
@@ -1310,7 +1310,7 @@ function applyForwardAmountToPreviousSegments(ordersList) {
   }
 }
 
-function parseInputText(text, fallbackRegion) {
+function parseInputText(text, fallbackRegion, fallbackType = "特码") {
   const result = [];
   deferredLines = [];
   let pendingNumberLines = [];
@@ -1437,7 +1437,7 @@ function parseInputText(text, fallbackRegion) {
     }
 
     const region = detectRegion(line, fallbackRegion);
-    const type = detectType(line);
+    const type = detectType(line, fallbackType);
     const targets = parseTargets(type, line);
     result.push(makeOrder({ raw: line, region, type, targets, amount }));
   }
@@ -1457,12 +1457,21 @@ function refreshParsedOrder(index) {
 
 function parseOrders() {
   const customer = currentCustomer();
-  parsed = parseInputText($("orderInput").value, $("defaultRegion").value)
+  parsed = parseInputText($("orderInput").value, $("defaultRegion").value, $("defaultType")?.value || "特码")
     .flatMap(expandZodiacComboOrder)
     .flatMap(expandMainZodiacSingles)
     .map((order) => applyCustomerDefaults(order, customer));
   renderParsed();
   renderDeferred();
+}
+
+function populateDefaultTypeSelect() {
+  const select = $("defaultType");
+  if (!select) return;
+  const selected = select.value || "特码";
+  select.innerHTML = visiblePlayTypes
+    .map((type) => `<option value="${type}" ${type === selected ? "selected" : ""}>默认${type}</option>`)
+    .join("");
 }
 
 function scheduleParseOrders() {
@@ -2415,6 +2424,7 @@ function bindControls() {
   on("orderInput", "input", scheduleParseOrders);
   on("orderInput", "paste", () => setTimeout(parseOrders, 0));
   on("defaultRegion", "change", parseOrders);
+  on("defaultType", "change", parseOrders);
   on("entryCustomer", "change", parseOrders);
   on("settingsCustomer", "change", renderCustomerSettings);
   on("imageOcrInput", "change", (event) => recognizeImageOrders(event.target.files?.[0]));
@@ -2442,6 +2452,7 @@ function clearInput() {
   renderParsed();
   renderDeferred();
 }
+populateDefaultTypeSelect();
 bindControls();
 on("riskRegion", "change", changeRiskRegion);
 on("adjustOdds", "input", renderRisk);
