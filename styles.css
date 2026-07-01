@@ -1701,14 +1701,14 @@ label {
   .orders-table td:nth-child(4),
   .orders-table th:nth-child(10),
   .orders-table td:nth-child(10),
-  .orders-table th:nth-child(12),
-  .orders-table td:nth-child(12) {
+  .orders-table th:nth-child(11),
+  .orders-table td:nth-child(11) {
     display: none;
   }
 
   .orders-table th:nth-child(5),
   .orders-table td:nth-child(5) {
-    width: 96px;
+    width: 84px;
     max-width: none;
     white-space: normal;
     word-break: break-word;
@@ -1746,10 +1746,20 @@ label {
   .orders-table th:nth-child(8),
   .orders-table td:nth-child(8),
   .orders-table th:nth-child(9),
-  .orders-table td:nth-child(9),
-  .orders-table th:nth-child(11),
-  .orders-table td:nth-child(11) {
-    width: 46px;
+  .orders-table td:nth-child(9) {
+    width: 42px;
+  }
+
+  .orders-table th:nth-child(12),
+  .orders-table td:nth-child(12) {
+    width: 34px;
+  }
+
+  .orders-table .order-delete {
+    min-height: 24px;
+    padding: 2px 4px;
+    border-radius: 6px;
+    font-size: 12px;
   }
 
   .orders-table .order-edit-number {
