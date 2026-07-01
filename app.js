@@ -2218,7 +2218,7 @@ function renderOrders() {
       <td>${htmlEscape(o.customerName || "散客")}</td>
       <td>${o.region}</td>
       <td>${o.type}</td>
-      <td>${o.targets.join(" ")}</td>
+      <td data-mobile-meta="${htmlEscape(`${o.customerName || "散客"} · ${o.region || ""} · ${o.type || ""}`)}">${o.targets.join(" ")}</td>
       <td>${money(o.amount)}</td>
       <td><input class="order-edit-number" data-order-id="${o.id}" data-field="odds" type="number" min="0" step="0.01" value="${money(o.odds)}" /></td>
       <td><input class="order-edit-number" data-order-id="${o.id}" data-field="rebate" type="number" min="0" step="0.01" value="${money(o.rebate)}" /></td>
