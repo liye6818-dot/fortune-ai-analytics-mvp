@@ -7,9 +7,11 @@ const REPORTED_STORAGE_KEY = "fortune_ai_analytics_mvp_reported";
 const LICENSE_SESSION_KEY = "fortune_ai_analytics_mvp_license";
 const DEVICE_KEY = "fortune_ai_analytics_mvp_device";
 const DATA_BACKUP_KEY = "fortune_ai_analytics_mvp_backup";
-const MACAU_DRAW_API = "https://macaumarksix.com/api/macaujc2.com";
-const HONGKONG_DRAW_API = "https://api3.marksix6.net/lottery_api.php?type=hk";
-const CORS_PROXY = "https://api.allorigins.win/raw?url=";
+const APP_CONFIG = window.APP_CONFIG || {};
+const MACAU_DRAW_API = APP_CONFIG.MACAU_DRAW_API || "";
+const HONGKONG_DRAW_API = APP_CONFIG.HONGKONG_DRAW_API || "";
+const CORS_PROXY = APP_CONFIG.CORS_PROXY || "";
+const TESSERACT_SCRIPT_URL = APP_CONFIG.TESSERACT_SCRIPT_URL || "";
 
 const zodiacOrder = ["鼠", "牛", "虎", "兔", "龙", "蛇", "马", "羊", "猴", "鸡", "狗", "猪"];
 const currentYearZodiac = "马";
@@ -1495,7 +1497,8 @@ function loadScript(src) {
 async function ensureTesseract() {
   if (window.Tesseract) return window.Tesseract;
   setOcrStatus("正在加载图片识别...");
-  await loadScript("https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js");
+  if (!TESSERACT_SCRIPT_URL) throw new Error("missing-ocr-script-url");
+  await loadScript(TESSERACT_SCRIPT_URL);
   return window.Tesseract;
 }
 
@@ -1849,7 +1852,8 @@ function drawApiForRegion(region) {
 }
 
 async function fetchJsonWithFallback(url) {
-  const urls = [url, `${CORS_PROXY}${encodeURIComponent(url)}`];
+  if (!url) throw new Error("missing-draw-api-url");
+  const urls = CORS_PROXY ? [url, `${CORS_PROXY}${encodeURIComponent(url)}`] : [url];
   let lastError;
   for (const apiUrl of urls) {
     try {
