@@ -105,6 +105,47 @@ function createSession({ securityCodeId = null, adminUserId = null, projectId = 
   return { token, csrfToken, expiresAt: session.expires_at };
 }
 
+function revokeActiveClientSessionsForSecurityCode(securityCodeId, req) {
+  const ts = nowIso();
+  const activeProjects = db.prepare(`
+    SELECT DISTINCT project_id AS projectId
+    FROM sessions
+    WHERE security_code_id = ? AND revoked_at IS NULL AND project_id IS NOT NULL
+  `).all(securityCodeId);
+
+  db.prepare(`
+    UPDATE sessions
+    SET revoked_at = ?
+    WHERE security_code_id = ? AND revoked_at IS NULL
+  `).run(ts, securityCodeId);
+
+  db.prepare(`
+    UPDATE project_members
+    SET online = 0, last_active_at = ?
+    WHERE security_code_id = ?
+  `).run(ts, securityCodeId);
+
+  db.prepare("UPDATE security_codes SET online = 0, updated_at = ? WHERE id = ?").run(ts, securityCodeId);
+
+  activeProjects.forEach((project) => {
+    broadcast(project.projectId, { type: "session:revoked", securityCodeId });
+  });
+
+  if (activeProjects.length) {
+    writeAuditLog(db, {
+      actorType: "client",
+      actorId: securityCodeId,
+      securityCodeId,
+      action: "replace_device_login",
+      entityType: "security_code",
+      entityId: securityCodeId,
+      ipAddress: req.ip,
+      userAgent: req.get("user-agent"),
+      metadata: { projectIds: activeProjects.map((project) => project.projectId) }
+    });
+  }
+}
+
 function ensureDefaultAdmin() {
   const existing = db.prepare("SELECT id FROM admin_users WHERE username = ?").get(config.adminUsername);
   if (existing) return;
@@ -351,6 +392,7 @@ app.post("/api/auth/security-code", (req, res) => {
     writeAuditLog(db, { actorType: "client", action: "login_failed", entityType: "security_code", ipAddress: req.ip, userAgent: req.get("user-agent") });
     return res.status(401).json({ error: "invalid_security_code" });
   }
+  revokeActiveClientSessionsForSecurityCode(row.id, req);
   const session = createSession({ securityCodeId: row.id, mode: "client", deviceId, deviceInfo, ipAddress: req.ip });
   db.prepare(`
     UPDATE security_codes

@@ -1,6 +1,8 @@
 window.APP_CONFIG = {
-  MACAU_DRAW_API: "https://macaumarksix.com/api/macaujc2.com",
-  HONGKONG_DRAW_API: "https://api3.marksix6.net/lottery_api.php?type=hk",
-  CORS_PROXY: "https://api.allorigins.win/raw?url=",
-  TESSERACT_SCRIPT_URL: "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"
+  MACAU_DRAW_API: "/api/draw/latest?region=macau",
+  HONGKONG_DRAW_API: "/api/draw/latest?region=hongkong",
+  CORS_PROXY: "",
+  TESSERACT_SCRIPT_URL: "",
+  LOCAL_AI_BASE_URL: "http://127.0.0.1:11434",
+  LOCAL_AI_MODEL: "qwen2.5:3b"
 };

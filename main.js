@@ -48,14 +48,13 @@ const defaultOdds = {
   "八不中": 1,
   "九不中": 1,
   "十不中": 1,
-  "两面": 1.95,
   "波色": 2.8,
   "半波": 5.6
 };
 const visiblePlayTypes = [
   "特码", "特肖", "一肖", "主肖", "平肖", "二连肖", "三连肖", "四连肖", "五连肖", "平尾", "二连尾", "三连尾", "四连尾", "五连尾",
   "五不中", "六不中", "七不中", "八不中", "九不中", "十不中",
-  "二中二", "三中三", "特串", "波色", "半波", "两面"
+  "二中二", "三中三", "特串", "波色", "半波"
 ];
 const oddsSettingKeys = [
   "特码", "一肖", "主肖",
@@ -640,6 +639,30 @@ function numbersForTail(tail) {
     .map(pad);
 }
 
+function numbersForHead(head) {
+  const normalized = Number(head);
+  const start = normalized === 0 ? 1 : normalized * 10 + 1;
+  const end = normalized === 0 ? 9 : Math.min(normalized * 10 + 9, 49);
+  return Array.from({ length: Math.max(0, end - start + 1) }, (_, i) => pad(start + i));
+}
+
+function specialNumberGroupTargets(text) {
+  const source = String(text || "");
+  const targets = [];
+  const hasSpecialPrefix = /特/.test(source);
+  if (/(?:特)?小数|(?:特)?小号|(?:特)?小码/.test(source) && !/[单双]/.test(source)) targets.push(...Array.from({ length: 24 }, (_, i) => i + 1).map(pad));
+  else if (/(?:特)?大数|(?:特)?大号|(?:特)?大码/.test(source) && !/[单双]/.test(source)) targets.push(...Array.from({ length: 25 }, (_, i) => i + 25).map(pad));
+  else if (/小/.test(source) && /双/.test(source)) targets.push(...Array.from({ length: 24 }, (_, i) => i + 1).filter((n) => n % 2 === 0).map(pad));
+  else if (/小/.test(source) && /单/.test(source)) targets.push(...Array.from({ length: 24 }, (_, i) => i + 1).filter((n) => n % 2 === 1).map(pad));
+  else if (/大/.test(source) && /双/.test(source)) targets.push(...Array.from({ length: 25 }, (_, i) => i + 25).filter((n) => n % 2 === 0).map(pad));
+  else if (/大/.test(source) && /单/.test(source)) targets.push(...Array.from({ length: 25 }, (_, i) => i + 25).filter((n) => n % 2 === 1).map(pad));
+  for (const match of source.matchAll(/(?:特)?([0-4])\s*头/g)) targets.push(...numbersForHead(match[1]));
+  for (const match of source.matchAll(/特?([0-9])\s*尾/g)) {
+    if (hasSpecialPrefix || !/平\s*[0-9]\s*尾|平尾|连尾/.test(source)) targets.push(...numbersForTail(match[1]));
+  }
+  return uniqueTargets(targets);
+}
+
 function detectRegion(line, fallback) {
   if (/港|香港/.test(line)) return "香港";
   if (/澳|澳门/.test(line)) return "澳门";
@@ -674,9 +697,9 @@ function detectType(line) {
   if (/特肖|特.*肖/.test(line)) return "特肖";
   if (/主肖/.test(line)) return "主肖";
   if (/平肖|平特|一肖/.test(line) || new RegExp(`平\\s*[${zodiacOrder.join("")}]`).test(line)) return "一肖";
-  if (/平尾/.test(line)) return "平尾";
+  if (/平\s*[0-9]\s*尾|平尾/.test(line)) return "平尾";
+  if (/特?[0-4]\s*头|特?[0-9]\s*尾|特?[大小单双]/.test(line)) return "特码";
   if (/半波|红波|蓝波|绿波|波色|红大|红小|蓝大|蓝小|绿大|绿小|红单|蓝单|绿单|红双|蓝双|绿双/.test(line)) return "特码";
-  if (/[大小单双]/.test(line) && /两面|特码/.test(line)) return "两面";
   return "特码";
 }
 
@@ -749,6 +772,8 @@ function stripLooseTrailingAmount(line) {
 
 function parseTargets(type, text) {
   const targetText = stripAmountText(text);
+  const specialGroup = type === "特码" ? specialNumberGroupTargets(targetText) : [];
+  if (specialGroup.length) return specialGroup;
   const wave = waveTargets(targetText);
   if (wave.length) return wave;
   const numbers = extractNumbers(targetText);
@@ -764,7 +789,6 @@ function parseTargets(type, text) {
     return ["红大", "红小", "红单", "红双", "蓝大", "蓝小", "蓝单", "蓝双", "绿大", "绿小", "绿单", "绿双"]
       .filter((v) => targetText.includes(v));
   }
-  if (type === "两面") return ["大", "小", "单", "双"].filter((v) => targetText.includes(v));
   return numbers;
 }
 
@@ -937,12 +961,40 @@ function parseNumberSlashAmountGroups(line, fallbackRegion) {
   return groups.length >= 2 ? groups : [];
 }
 
+function parseCommaAmountStream(line, fallbackRegion) {
+  const normalized = normalizeText(line);
+  if (!/[元米块斤]|各|每/.test(normalized)) return [];
+  const region = detectRegion(normalized, fallbackRegion);
+  const amount = "([0-9]+(?:\\.[0-9]+)?|[一二两三四五六七八九十百]+)";
+  const amountPattern = new RegExp(`((?:各数|每数|个数|每个|各|每)\\s*)?${amount}\\s*(?:元|米|块|斤)`, "g");
+  const groups = [];
+  let cursor = 0;
+  let match;
+  while ((match = amountPattern.exec(normalized)) !== null) {
+    const source = normalized.slice(cursor, match.index);
+    const parsedAmount = chineseAmountToNumber(match[2]) || 0;
+    const specialTargets = specialNumberGroupTargets(source);
+    const numbers = specialTargets.length ? specialTargets : extractNumbers(source);
+    if (parsedAmount && numbers.length) {
+      groups.push(makeOrder({
+        raw: `${source} ${match[0]}`.trim(),
+        region,
+        type: "特码",
+        targets: match[1] || specialTargets.length ? numbers : [numbers[numbers.length - 1]],
+        amount: parsedAmount
+      }));
+    }
+    cursor = amountPattern.lastIndex;
+  }
+  return groups.length >= 2 ? groups : [];
+}
+
 function isEditableDeferredLine(line) {
   return /连肖|[二三四五]连/.test(String(line || "")) && zodiacMatches(line).length > 0;
 }
 
 function hasPlayKeyword(line) {
-  return /连肖|[二三四五]连|[二三四五]连尾|[五六七八九十]不中|[5-9]不中|10不中|二中二|2\s*中\s*2|对碰|拖|三中三|3中3|特串|特肖|平肖|平特|平[鼠牛虎兔龙蛇马羊猴鸡狗猪]|一肖|主肖|平尾|半波|波色|红波|蓝波|绿波|两面/.test(String(line || ""));
+  return /连肖|[二三四五]连|[二三四五]连尾|[五六七八九十]不中|[5-9]不中|10不中|二中二|2\s*中\s*2|对碰|拖|三中三|3中3|特串|特肖|平肖|平特|平[鼠牛虎兔龙蛇马羊猴鸡狗猪]|一肖|主肖|平尾|半波|波色|红波|蓝波|绿波/.test(String(line || ""));
 }
 
 function makeEditableDeferredOrder(line, fallbackRegion) {
@@ -1255,6 +1307,12 @@ function parseInputAsEditableSegments(lines, fallbackRegion) {
       continue;
     }
 
+    const commaAmountGroups = parseCommaAmountStream(line, fallbackRegion);
+    if (commaAmountGroups.length) {
+      result.push(...commaAmountGroups);
+      continue;
+    }
+
     if (hasPlayKeyword(line)) {
       result.push(makeKeywordOrder(line, fallbackRegion));
       continue;
@@ -1369,6 +1427,13 @@ function parseInputText(text, fallbackRegion) {
       continue;
     }
 
+    const commaAmountGroups = parseCommaAmountStream(line, fallbackRegion);
+    if (commaAmountGroups.length) {
+      pendingNumberLines = [];
+      result.push(...commaAmountGroups);
+      continue;
+    }
+
     if (hasPlayKeyword(line)) {
       pendingNumberLines = [];
       result.push(makeKeywordOrder(line, fallbackRegion));
@@ -1475,6 +1540,120 @@ function scheduleParseOrders() {
 function setOcrStatus(text) {
   const status = $("ocrStatus");
   if (status) status.textContent = text || "";
+}
+
+function localAiCandidates() {
+  return [LOCAL_AI_BASE_URL || "http://127.0.0.1:11434"];
+}
+
+function isAllowedLocalAiUrl(baseUrl) {
+  try {
+    const url = new URL(baseUrl);
+    return ["127.0.0.1", "localhost", "[::1]"].includes(url.hostname) && url.protocol === "http:";
+  } catch {
+    return false;
+  }
+}
+
+function aiNormalizePrompt(text) {
+  return `把下面的六合彩下注内容整理成系统容易解析的纯文本。
+只输出整理后的订单行，不要解释，不要 Markdown，不要 JSON。
+保留区域、玩法、号码/生肖/尾数、金额。
+可用格式示例：
+澳门 特码 06 08 各数 50
+香港 特肖 鼠牛 各肖 20
+澳门 平尾 5尾 9尾 各 100
+
+原始内容：
+${text}`;
+}
+
+async function fetchWithTimeout(url, options = {}, timeoutMs = 45000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function firstOllamaModel(baseUrl) {
+  if (LOCAL_AI_MODEL) return LOCAL_AI_MODEL;
+  const response = await fetchWithTimeout(`${baseUrl}/api/tags`, { cache: "no-store" }, 4000);
+  if (!response.ok) throw new Error("ollama-tags-failed");
+  const data = await response.json();
+  return data?.models?.[0]?.name || "";
+}
+
+async function callOllama(baseUrl, prompt) {
+  const model = await firstOllamaModel(baseUrl);
+  if (!model) throw new Error("ollama-model-missing");
+  const response = await fetchWithTimeout(`${baseUrl}/api/generate`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ model, prompt, stream: false, options: { temperature: 0.1 } })
+  });
+  if (!response.ok) throw new Error("ollama-generate-failed");
+  const data = await response.json();
+  return String(data?.response || "").trim();
+}
+
+function cleanAiOrderText(text) {
+  return String(text || "")
+    .replace(/```[\w-]*|```/g, "")
+    .replace(/^\s*[-*]\s+/gm, "")
+    .replace(/^整理后[:：]\s*/gm, "")
+    .trim();
+}
+
+function canUseRuleParsedOrders(items) {
+  return items.length > 0 && items.every((order) => Number(order.amount || 0) > 0 && order.targets?.length);
+}
+
+async function aiParseOrders() {
+  if (location.protocol === "file:") {
+    setOcrStatus("请用本地AI版地址打开，file页面会被 Ollama 拦截");
+    return;
+  }
+  const input = $("orderInput");
+  const raw = input.value.trim();
+  if (!raw) {
+    setOcrStatus("请先输入要解析的内容");
+    return;
+  }
+  const customer = currentCustomer();
+  const ruleParsed = parseInputText(raw, $("defaultRegion").value, $("defaultType")?.value || "特码")
+    .flatMap(expandZodiacComboOrder)
+    .flatMap(expandMainZodiacSingles)
+    .map((order) => applyCustomerDefaults(order, customer));
+  if (canUseRuleParsedOrders(ruleParsed)) {
+    parsed = ruleParsed;
+    renderParsed();
+    renderDeferred();
+    setOcrStatus("规则已解析，请核对后入库");
+    return;
+  }
+  const prompt = aiNormalizePrompt(raw);
+  setOcrStatus("AI正在整理...");
+  let lastError;
+  for (const baseUrl of localAiCandidates()) {
+    try {
+      if (!isAllowedLocalAiUrl(baseUrl)) throw new Error("local-ai-url-only");
+      const text = await callOllama(baseUrl, prompt);
+      const cleaned = cleanAiOrderText(text);
+      if (!cleaned) throw new Error("empty-ai-result");
+      input.value = cleaned;
+      resizeOrderInput();
+      parseOrders();
+      setOcrStatus(`AI已整理，请核对后入库`);
+      return;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  console.warn(lastError);
+  setOcrStatus("AI解析失败，仅允许连接本机 Ollama");
 }
 
 function loadScript(src) {
@@ -1921,7 +2100,6 @@ function isWinner(order, drawNums) {
   if (order.type === "特串") return [...targets].some((target) => firstSixSet.has(target)) && targets.has(pad(special));
   if (order.type === "波色") return order.targets.includes(specialMeta.color);
   if (order.type === "半波") return order.targets.some((t) => specialMeta.color[0] === t[0] && (t.includes(specialMeta.size) || t.includes(specialMeta.oddEven)));
-  if (order.type === "两面") return order.targets.includes(specialMeta.size) || order.targets.includes(specialMeta.oddEven);
   return false;
 }
 
@@ -2411,6 +2589,7 @@ function bindControls() {
   setClick("saveCustomerSettingsBtn", saveCustomerSettings);
   setClick("saveParsedBtn", saveParsed);
   setClick("clearInputBtn", clearInput);
+  setClick("aiParseBtn", aiParseOrders);
   setClick("fetchLatestDrawBtn", fetchLatestDraw);
   setClick("settleBtn", settleOrders);
   setClick("clearSettlementBtn", clearSettlement);
@@ -2421,8 +2600,7 @@ function bindControls() {
   on("defaultRegion", "change", parseOrders);
   on("entryCustomer", "change", parseOrders);
   on("settingsCustomer", "change", renderCustomerSettings);
-  on("imageOcrInput", "change", (event) => recognizeImageOrders(event.target.files?.[0]));
-  document.querySelectorAll("[data-mobile-panel]").forEach((button) => {
+    document.querySelectorAll("[data-mobile-panel]").forEach((button) => {
     button.addEventListener("click", () => {
       const panel = button.dataset.mobilePanel;
       if (panel === "close") closeMobilePanels();

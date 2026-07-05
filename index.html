@@ -165,8 +165,7 @@
           </select>
           <select id="defaultType" aria-label="默认玩法"></select>
           <select id="entryCustomer"></select>
-          <label class="file-button" for="imageOcrInput">识别图片文字</label>
-          <input id="imageOcrInput" type="file" accept="image/*" />
+          <button id="aiParseBtn" type="button" onclick="FortuneApp.aiParseOrders()">AI解析</button>
           <button id="parseBtn" type="button" onclick="FortuneApp.parseOrders()">解析注单</button>
           <button id="saveParsedBtn" type="button" onclick="FortuneApp.saveParsed()">入库</button>
           <button id="clearInputBtn" type="button" onclick="FortuneApp.clearInput()">清空输入</button>
@@ -370,8 +369,8 @@
 
     </main>
 
-    <script src="./config.js?v=20260703_pwa_1"></script>
-    <script src="./app.js?v=20260703_pwa_1"></script>
+    <script src="./config.js?v=20260706_parse_single_device"></script>
+    <script src="./app.js?v=20260706_parse_single_device"></script>
     <script src="./pwa.js?v=20260703_pwa_1"></script>
   </body>
 </html>
