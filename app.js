@@ -2254,13 +2254,13 @@ function exposureForNumber(region, n, limit = 0) {
   const customerRebate = 0;
   const stake = grossStake;
   const adjust = Number(adjustments[region]?.[pad(n)] || 0);
-  const adjustOdds = Number($("adjustOdds").value || 47);
-  const total = direct + adjust;
-  const autoReport = limit > 0 ? Math.max(0, total - limit) : 0;
-  const manualReport = adjust;
-  const reportAmount = Math.max(autoReport, manualReport);
-  const profit = total - reportAmount;
-  return { n, meta, stake, grossStake, customerRebate, payout, direct, sources, adjust, total, autoReport, reportAmount, profit, excess: 0 };
+  const storedReported = Number(reported[region]?.[pad(n)] || reported[region]?.[meta.label] || 0);
+  const total = direct;
+  const manualReport = Math.min(total, Math.max(0, adjust + storedReported));
+  const balance = Math.max(0, total - manualReport);
+  const autoReport = limit > 0 ? Math.max(0, balance - limit) : 0;
+  const reportAmount = manualReport;
+  return { n, meta, stake, grossStake, customerRebate, payout, direct, sources, adjust, total, balance, autoReport, reportAmount, profit: 0, excess: 0 };
 }
 
 function sourceSummary(row) {
@@ -2298,9 +2298,11 @@ function markReportSubmitted() {
   const region = $("riskRegion").value;
   const limit = Number($("riskLimit").value || 0);
   reported[region] = reported[region] || {};
-  Array.from({ length: 49 }, (_, i) => exposureForNumber(region, i + 1, limit)).forEach((row) => {
-    const excess = Math.max(0, row.total - limit);
-    if (excess > 0) reported[region][row.meta.label] = excess;
+  riskRowsAtLimit(region, limit).forEach((row) => {
+    const pending = Number(row.pendingReport || 0);
+    if (pending > 0) {
+      reported[region][row.meta.label] = Number(reported[region][row.meta.label] || 0) + pending;
+    }
   });
   saveAll();
   renderRisk();
@@ -2310,40 +2312,40 @@ function markReportSubmitted() {
 function clearReportedList() {
   const region = $("riskRegion").value;
   reported[region] = {};
+  adjustments[region] = {};
   saveAll();
   renderRisk();
   $("riskSummary").textContent = "已清空已上报记录";
 }
 
+function riskSnapshot(region, limit) {
+  const rows = Array.from({ length: 49 }, (_, i) => {
+    const row = exposureForNumber(region, i + 1, limit);
+    row.excess = Math.max(0, row.balance - limit);
+    row.reported = row.reportAmount;
+    row.pendingReport = row.excess;
+    return row;
+  });
+  const balanceTotal = rows.reduce((sum, row) => sum + Number(row.balance || 0), 0);
+  const reportTotal = rows.reduce((sum, row) => sum + Number(row.reportAmount || 0), 0);
+  const adjustOdds = Number($("adjustOdds").value || 47);
+  rows.forEach((row) => {
+    row.payoutAfterReport = Number(row.balance || 0) * adjustOdds;
+    row.profit = balanceTotal - row.payoutAfterReport;
+  });
+  return { rows, balanceTotal, reportTotal, adjustOdds };
+}
+
 function riskRowsAtLimit(region, limit) {
-  return Array.from({ length: 49 }, (_, i) => exposureForNumber(region, i + 1, limit));
+  return riskSnapshot(region, limit).rows;
 }
 
 function maxSafeRiskLimit(region) {
-  const baseRows = riskRowsAtLimit(region, 1);
-  const maxTotal = Math.ceil(Math.max(...baseRows.map((row) => Number(row.total || 0)), 0));
-  if (!maxTotal) return { limit: 0, minProfit: 0 };
-  const safeAt = (limit) => {
-    const rows = riskRowsAtLimit(region, limit);
-    return Math.min(...rows.map((row) => row.profit));
-  };
-  if (safeAt(1) < 0) return { limit: 1, minProfit: safeAt(1), unsafe: true };
-  let low = 1;
-  let high = maxTotal;
-  let best = 1;
-  let bestProfit = safeAt(1);
-  while (low <= high) {
-    const mid = Math.floor((low + high) / 2);
-    const minProfit = safeAt(mid);
-    if (minProfit >= 0) {
-      best = mid;
-      bestProfit = minProfit;
-      low = mid + 1;
-    } else {
-      high = mid - 1;
-    }
-  }
-  return { limit: best, minProfit: bestProfit };
+  const snapshot = riskSnapshot(region, 0);
+  const maxBalance = Math.max(...snapshot.rows.map((row) => Number(row.balance || 0)), 0);
+  if (!snapshot.balanceTotal || !snapshot.adjustOdds || !maxBalance) return { limit: 0, minProfit: 0 };
+  const limit = Math.max(0, Math.min(maxBalance, Math.floor(snapshot.balanceTotal / snapshot.adjustOdds)));
+  return { limit, minProfit: snapshot.balanceTotal - (limit * snapshot.adjustOdds) };
 }
 
 function applySmartRiskLimit() {
@@ -2365,13 +2367,11 @@ function renderRisk() {
   const region = $("riskRegion").value;
   const limit = Number($("riskLimit").value || 0);
   setRiskLimitForRegion(region, limit);
-  const rows = Array.from({ length: 49 }, (_, i) => {
-    const row = exposureForNumber(region, i + 1, limit);
-    row.excess = Math.max(0, row.total - limit);
-    row.reported = Number(reported[region]?.[row.meta.label] || 0);
-    row.pendingReport = Math.max(0, row.excess - row.reported);
-    return row;
-  }).sort((a, b) => b.pendingReport - a.pendingReport || b.excess - a.excess || b.total - a.total || a.profit - b.profit || a.n - b.n);
+  const snapshot = riskSnapshot(region, limit);
+  const rows = snapshot.rows;
+  const balanceTotal = snapshot.balanceTotal;
+  const reportTotal = snapshot.reportTotal;
+  rows.sort((a, b) => b.pendingReport - a.pendingReport || b.excess - a.excess || b.balance - a.balance || a.profit - b.profit || a.n - b.n);
   const profits = rows.map((r) => r.profit);
   const specialOrderTotal = orders
     .filter((order) => order.region === region && order.type === "特码")
@@ -2380,7 +2380,8 @@ function renderRisk() {
   const riskDiff = riskDirectTotal - specialOrderTotal;
   $("maxProfit").textContent = money(Math.max(...profits, 0));
   $("maxLoss").textContent = money(Math.min(...profits, 0));
-  $("specialRiskCheck").textContent = `${money(specialOrderTotal)} / ${money(riskDirectTotal)}${riskDiff ? ` 差${money(riskDiff)}` : ""}`;
+  $("specialRiskCheck").textContent = `${money(specialOrderTotal)} - ${money(reportTotal)} = ${money(balanceTotal)}${riskDiff ? ` 差${money(riskDiff)}` : ""}`;
+  $("reportTotal").textContent = money(reportTotal);
   const smartLimit = maxSafeRiskLimit(region);
   $("smartRiskLimitText").textContent = smartLimit.unsafe
     ? `推荐 ${money(smartLimit.limit)}，仍亏 ${money(smartLimit.minProfit)}`
@@ -2395,7 +2396,7 @@ function renderRisk() {
       <td>${money(r.direct)}</td>
       <td class="source-cell">${r.sources?.length ? `<details><summary>${htmlEscape(sourceSummary(r))}</summary>${sourceDetails(r)}</details>` : "-"}</td>
       <td><input data-adjust="${r.meta.label}" type="number" min="0" step="1" value="${money(r.adjust)}" /></td>
-      <td>${money(r.total)}</td>
+      <td>${money(r.balance)}</td>
       <td class="${r.excess > 0 ? "bad" : "ok"}">${money(r.excess)}</td>
       <td class="${r.profit >= 0 ? "ok" : "bad"}">${money(r.profit)}</td>
     </tr>
@@ -2403,7 +2404,7 @@ function renderRisk() {
   $("reportRows").innerHTML = reportRows.length ? reportRows.map((r) => `
     <tr>
       <td>${r.meta.label}</td>
-      <td>${money(r.total)}</td>
+      <td>${money(r.balance)}</td>
       <td>${money(r.reported)}</td>
       <td class="bad">${money(r.pendingReport)}</td>
     </tr>
