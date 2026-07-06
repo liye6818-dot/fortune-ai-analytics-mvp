@@ -349,7 +349,7 @@ function escapeRegExp(value) {
 function findCustomerInText(text) {
   const compact = compactText(text);
   return customers
-    .filter((customer) => customer?.name && customer.id !== "default")
+    .filter((customer) => customer?.name)
     .sort((a, b) => String(b.name).length - String(a.name).length)
     .find((customer) => {
       const name = compactText(customer.name);
