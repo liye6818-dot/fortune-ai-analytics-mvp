@@ -2312,13 +2312,15 @@ function clearReportedList() {
 function riskSnapshot(region, limit) {
   const rows = Array.from({ length: 49 }, (_, i) => {
     const row = exposureForNumber(region, i + 1, limit);
-    row.excess = Math.max(0, row.balance - limit);
+    row.rawBalance = Number(row.balance || 0);
+    row.pendingReport = limit > 0 ? Math.max(0, row.rawBalance - limit) : 0;
+    row.balance = Math.max(0, row.rawBalance - row.pendingReport);
+    row.excess = row.pendingReport;
     row.reported = row.reportAmount;
-    row.pendingReport = row.excess;
     return row;
   });
   const balanceTotal = rows.reduce((sum, row) => sum + Number(row.balance || 0), 0);
-  const reportTotal = rows.reduce((sum, row) => sum + Number(row.reportAmount || 0), 0);
+  const reportTotal = rows.reduce((sum, row) => sum + Number(row.reportAmount || 0) + Number(row.pendingReport || 0), 0);
   const adjustOdds = Number($("adjustOdds").value || 47);
   rows.forEach((row) => {
     row.payoutAfterReport = Number(row.balance || 0) * adjustOdds;
