@@ -133,6 +133,12 @@
             <input id="standaloneCustomExpiresAt" placeholder="自定义到期 2027-07-03" />
             <button id="createStandaloneKeyBtn" type="button">创建单机密钥</button>
           </div>
+          <div class="grid" style="margin-top:12px;">
+            <input id="legacyKey" placeholder="导入旧版FA激活码" />
+            <input id="legacyDeviceId" placeholder="旧客户设备号，可选" />
+            <input id="legacyNote" placeholder="旧客户备注，例如客户名" />
+            <button id="importLegacyKeyBtn" type="button">导入旧版激活码</button>
+          </div>
           <p id="standaloneStatus" class="status"></p>
           <div class="grid" style="grid-template-columns: 1fr auto; margin-top:12px;">
             <input id="standaloneSearch" placeholder="搜索备注、密钥预览、设备号、IP" />
@@ -337,6 +343,27 @@
         }
       }
 
+      async function importLegacyKey() {
+        $("standaloneStatus").textContent = "导入中...";
+        try {
+          await api("/api/admin/standalone-keys/import-legacy", {
+            method: "POST",
+            body: JSON.stringify({
+              key: $("legacyKey").value,
+              deviceId: $("legacyDeviceId").value,
+              note: $("legacyNote").value
+            })
+          });
+          $("standaloneStatus").textContent = "已导入旧版激活码";
+          $("legacyKey").value = "";
+          $("legacyDeviceId").value = "";
+          $("legacyNote").value = "";
+          await loadStandaloneKeys();
+        } catch (error) {
+          $("standaloneStatus").textContent = error.message;
+        }
+      }
+
       async function loadStandaloneKeys() {
         const data = await api(`/api/admin/standalone-keys?q=${encodeURIComponent($("standaloneSearch").value)}`);
         $("standaloneRows").innerHTML = data.items.map((item) => `
@@ -445,6 +472,7 @@
 
       $("loginBtn").onclick = login;
       $("createStandaloneKeyBtn").onclick = createStandaloneKey;
+      $("importLegacyKeyBtn").onclick = importLegacyKey;
       $("standaloneSearchBtn").onclick = loadStandaloneKeys;
       $("createCodeBtn").onclick = createCode;
       $("searchBtn").onclick = loadCodes;

@@ -16,6 +16,7 @@ import {
   hashStandaloneKey,
   hashSessionToken,
   isExpired,
+  legacyLicenseExpiry,
   makeId,
   nowIso,
   randomToken,
@@ -337,6 +338,50 @@ app.post("/api/admin/standalone-keys", requireAdmin(db), (req, res) => {
     throw error;
   }
   writeAuditLog(db, { actorType: "admin", actorId: req.admin.id, action: "create", entityType: "standalone_key", entityId: row.id, ipAddress: req.ip, userAgent: req.get("user-agent") });
+  res.status(201).json({ item: publicStandaloneKey(row) });
+});
+
+app.post("/api/admin/standalone-keys/import-legacy", requireAdmin(db), (req, res) => {
+  const { key, note = "", deviceId = "" } = req.body || {};
+  const normalizedKey = String(key || "").trim().toUpperCase();
+  const expiresAt = legacyLicenseExpiry(normalizedKey);
+  if (!expiresAt) return res.status(400).json({ error: "invalid_legacy_license" });
+  const ts = nowIso();
+  const row = {
+    id: makeId("stk"),
+    key_hash: hashStandaloneKey(normalizedKey),
+    key_preview: codePreview(normalizedKey),
+    note: note || "旧版激活码导入",
+    status: "active",
+    expires_at: expiresAt,
+    permanent: 0,
+    bound_device_id: String(deviceId || "").trim().toUpperCase() || null,
+    bound_at: deviceId ? ts : null,
+    bound_ip: null,
+    bound_user_agent: null,
+    created_by: req.admin.id,
+    created_at: ts,
+    updated_at: ts
+  };
+  try {
+    db.prepare(`
+      INSERT INTO standalone_keys (
+        id, key_hash, key_preview, note, status, expires_at, permanent,
+        bound_device_id, bound_at, bound_ip, bound_user_agent,
+        created_by, created_at, updated_at
+      ) VALUES (
+        @id, @key_hash, @key_preview, @note, @status, @expires_at, @permanent,
+        @bound_device_id, @bound_at, @bound_ip, @bound_user_agent,
+        @created_by, @created_at, @updated_at
+      )
+    `).run(row);
+  } catch (error) {
+    if (String(error.message || "").includes("UNIQUE")) {
+      return res.status(409).json({ error: "standalone_key_exists" });
+    }
+    throw error;
+  }
+  writeAuditLog(db, { actorType: "admin", actorId: req.admin.id, action: "import_legacy", entityType: "standalone_key", entityId: row.id, ipAddress: req.ip, userAgent: req.get("user-agent") });
   res.status(201).json({ item: publicStandaloneKey(row) });
 });
 

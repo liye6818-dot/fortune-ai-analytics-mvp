@@ -26,6 +26,13 @@ export function hashStandaloneKey(key) {
   return sha256(`${config.securityCodePepper}|standalone|${String(key || "").trim()}`);
 }
 
+export function legacyLicenseExpiry(key) {
+  const match = String(key || "").trim().toUpperCase().match(/^FA-(\d{8})-[0-9A-F]{8}$/);
+  if (!match) return null;
+  const compact = match[1];
+  return new Date(`${compact.slice(0, 4)}-${compact.slice(4, 6)}-${compact.slice(6, 8)}T23:59:59.999Z`).toISOString();
+}
+
 export function hashSessionToken(token) {
   return sha256(`${config.sessionSecret}|${String(token || "")}`);
 }
