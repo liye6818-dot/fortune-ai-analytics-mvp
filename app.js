@@ -338,6 +338,46 @@ function customerById(id) {
   return normalizeCustomer(customers.find((customer) => customer.id === id) || customers[0]);
 }
 
+function compactText(value) {
+  return String(value || "").replace(/[\s:：,，.。;；、\-_/\\|()[\]{}<>《》【】"'“”‘’]/g, "").toLowerCase();
+}
+
+function escapeRegExp(value) {
+  return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function findCustomerInText(text) {
+  const compact = compactText(text);
+  return customers
+    .filter((customer) => customer?.name && customer.id !== "default")
+    .sort((a, b) => String(b.name).length - String(a.name).length)
+    .find((customer) => {
+      const name = compactText(customer.name);
+      return name.length >= 2 && compact.includes(name);
+    }) || null;
+}
+
+function removeCustomerNameFromText(text, customer) {
+  if (!customer?.name) return text;
+  return String(text || "").replace(new RegExp(escapeRegExp(customer.name), "gi"), " ");
+}
+
+function parseInputContext(text) {
+  const detectedCustomer = findCustomerInText(text);
+  const region = detectRegion(text, $("defaultRegion").value);
+  const customer = detectedCustomer ? normalizeCustomer(detectedCustomer) : currentCustomer();
+  return {
+    customer,
+    region,
+    text: removeCustomerNameFromText(text, detectedCustomer)
+  };
+}
+
+function applyParseContextToControls(context) {
+  if (context.customer?.id && $("entryCustomer")) $("entryCustomer").value = context.customer.id;
+  if (context.region && $("defaultRegion")) $("defaultRegion").value = context.region;
+}
+
 function orderTotalUnits(order) {
   if (order?.packageTotal) return 1;
   return groupedPlayTypes.has(order?.type) ? 1 : (order?.targets?.length || 0);
@@ -664,7 +704,7 @@ function specialNumberGroupTargets(text) {
 }
 
 function detectRegion(line, fallback) {
-  if (/港|香港/.test(line)) return "香港";
+  if (/香|港|香港/.test(line)) return "香港";
   if (/澳|澳门/.test(line)) return "澳门";
   return fallback;
 }
@@ -1523,11 +1563,12 @@ function refreshParsedOrder(index) {
 }
 
 function parseOrders() {
-  const customer = currentCustomer();
-  parsed = parseInputText($("orderInput").value, $("defaultRegion").value, $("defaultType")?.value || "特码")
+  const context = parseInputContext($("orderInput").value);
+  applyParseContextToControls(context);
+  parsed = parseInputText(context.text, context.region, $("defaultType")?.value || "特码")
     .flatMap(expandZodiacComboOrder)
     .flatMap(expandMainZodiacSingles)
-    .map((order) => applyCustomerDefaults(order, customer));
+    .map((order) => applyCustomerDefaults(order, context.customer));
   renderParsed();
   renderDeferred();
 }
@@ -1631,11 +1672,12 @@ async function aiParseOrders() {
     setOcrStatus("请先输入要解析的内容");
     return;
   }
-  const customer = currentCustomer();
-  const ruleParsed = parseInputText(raw, $("defaultRegion").value, $("defaultType")?.value || "特码")
+  const context = parseInputContext(raw);
+  applyParseContextToControls(context);
+  const ruleParsed = parseInputText(context.text, context.region, $("defaultType")?.value || "特码")
     .flatMap(expandZodiacComboOrder)
     .flatMap(expandMainZodiacSingles)
-    .map((order) => applyCustomerDefaults(order, customer));
+    .map((order) => applyCustomerDefaults(order, context.customer));
   if (canUseRuleParsedOrders(ruleParsed)) {
     parsed = ruleParsed;
     renderParsed();

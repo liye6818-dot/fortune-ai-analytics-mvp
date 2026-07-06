@@ -30,6 +30,7 @@ build/
 customer-security-codes/
 security-codes/
 client-secrets/
+private-tools/
 
 *.bak_*
 *.recover.*
