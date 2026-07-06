@@ -148,8 +148,15 @@ function revokeActiveClientSessionsForSecurityCode(securityCodeId, req) {
 
 function ensureDefaultAdmin() {
   const existing = db.prepare("SELECT id FROM admin_users WHERE username = ?").get(config.adminUsername);
-  if (existing) return;
   const ts = nowIso();
+  if (existing) {
+    db.prepare(`
+      UPDATE admin_users
+      SET password_hash = ?, status = 'active', updated_at = ?
+      WHERE id = ?
+    `).run(config.adminPasswordHash, ts, existing.id);
+    return;
+  }
   db.prepare(`
     INSERT INTO admin_users (id, username, password_hash, status, created_at, updated_at)
     VALUES (?, ?, ?, 'active', ?, ?)
