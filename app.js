@@ -4,7 +4,8 @@ const CUSTOMER_KEY = "fortune_ai_analytics_mvp_customers";
 const ORDER_STORAGE_KEY = "fortune_ai_analytics_mvp_orders";
 const ADJUST_STORAGE_KEY = "fortune_ai_analytics_mvp_adjustments";
 const REPORTED_STORAGE_KEY = "fortune_ai_analytics_mvp_reported";
-const LICENSE_SESSION_KEY = "fortune_ai_analytics_mvp_license";
+const LEGACY_LICENSE_SESSION_KEY = "fortune_ai_analytics_mvp_license";
+const LICENSE_SESSION_KEY = "fortune_ai_analytics_mvp_standalone_license_v2";
 const DEVICE_KEY = "fortune_ai_analytics_mvp_device";
 const DATA_BACKUP_KEY = "fortune_ai_analytics_mvp_backup";
 const APP_CONFIG = window.APP_CONFIG || {};
@@ -197,9 +198,6 @@ async function activateLicense() {
   } catch {
     result = null;
   }
-  if (!result?.ok && /^FA-/i.test(key)) {
-    result = validateLicense(key);
-  }
   if (!result) result = { ok: false, message: "无法连接密钥服务器，请稍后重试。" };
   if (!result.ok) {
     $("licenseMessage").textContent = result.message;
@@ -209,6 +207,8 @@ async function activateLicense() {
 }
 
 function initLicenseGate() {
+  localStorage.removeItem(LEGACY_LICENSE_SESSION_KEY);
+  sessionStorage.removeItem(LEGACY_LICENSE_SESSION_KEY);
   $("deviceCodeText").textContent = deviceCode();
   $("copyDeviceBtn").addEventListener("click", async () => {
     await navigator.clipboard?.writeText(deviceCode()).catch(() => {});
@@ -224,11 +224,23 @@ function initLicenseGate() {
   const savedKey = localStorage.getItem(LICENSE_SESSION_KEY) || sessionStorage.getItem(LICENSE_SESSION_KEY);
   if (savedKey) {
     $("licenseInput").value = savedKey;
-    const result = validateLicense(savedKey);
-    if (result.ok) {
-      unlockApp(savedKey, result.expires);
-      return;
-    }
+    $("licenseMessage").textContent = "正在验证单机密钥...";
+    validateStandaloneKey(savedKey).then((result) => {
+      if (result.ok) {
+        unlockApp(savedKey, result.expires);
+      } else {
+        localStorage.removeItem(LICENSE_SESSION_KEY);
+        sessionStorage.removeItem(LICENSE_SESSION_KEY);
+        $("licenseMessage").textContent = "旧版激活码已下线，请使用后台单机密钥重新登录。";
+        setAppLocked(true);
+      }
+    }).catch(() => {
+      localStorage.removeItem(LICENSE_SESSION_KEY);
+      sessionStorage.removeItem(LICENSE_SESSION_KEY);
+      $("licenseMessage").textContent = "无法连接密钥服务器，请稍后重试。";
+      setAppLocked(true);
+    });
+    return;
   }
   setAppLocked(true);
 }
