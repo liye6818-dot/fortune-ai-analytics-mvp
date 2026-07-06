@@ -353,7 +353,9 @@ function findCustomerInText(text) {
     .sort((a, b) => String(b.name).length - String(a.name).length)
     .find((customer) => {
       const name = compactText(customer.name);
-      return name.length >= 2 && compact.includes(name);
+      if (!name) return false;
+      if (name.length >= 2) return compact.includes(name);
+      return new RegExp(`(^|[^\\u4e00-\\u9fa5A-Za-z0-9])${escapeRegExp(customer.name)}(?=$|[^\\u4e00-\\u9fa5A-Za-z0-9]|香|港|澳|\\d)`, "i").test(String(text || ""));
     }) || null;
 }
 

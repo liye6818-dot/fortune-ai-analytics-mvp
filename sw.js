@@ -1,4 +1,4 @@
-const PWA_VERSION = "20260706_customer_region_3";
+const PWA_VERSION = "20260706_customer_region_4";
 const CACHE_NAME = `caishenye88-${PWA_VERSION}`;
 
 const CORE_ASSETS = [
@@ -7,8 +7,8 @@ const CORE_ASSETS = [
   "./offline.html?v=20260703_pwa_1",
   "./manifest.json?v=20260703_pwa_1",
   "./config.js?v=20260703_pwa_1",
-  "./app.js?v=20260706_customer_region_3",
-  "./main.js?v=20260706_customer_region_3",
+  "./app.js?v=20260706_customer_region_4",
+  "./main.js?v=20260706_customer_region_4",
   "./styles.css?v=20260703_pwa_1",
   "./icons/icon-192.png?v=20260703_pwa_1",
   "./icons/icon-512.png?v=20260703_pwa_1",
@@ -38,7 +38,7 @@ async function networkFirst(request) {
     if (response && response.ok) await cache.put(request, response.clone());
     return response;
   } catch (error) {
-    return (await cache.match(request)) || cache.match("./index.html?v=20260706_customer_region_3") || cache.match("./offline.html?v=20260706_customer_region_3");
+    return (await cache.match(request)) || cache.match("./index.html?v=20260706_customer_region_4") || cache.match("./offline.html?v=20260706_customer_region_4");
   }
 }
 
