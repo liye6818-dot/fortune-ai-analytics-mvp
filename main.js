@@ -338,8 +338,33 @@ function customerById(id) {
   return normalizeCustomer(customers.find((customer) => customer.id === id) || customers[0]);
 }
 
+const reservedCustomerNames = new Set(["上报", "已上报", "未上报", "待上报", "刚刚", "全部", "已提交", "未提交"]);
+
 function compactText(value) {
   return String(value || "").replace(/[\s:：,，.。;；、\-_/\\|()[\]{}<>《》【】"'“”‘’]/g, "").toLowerCase();
+}
+
+function sanitizeCustomers(list) {
+  const seen = new Set();
+  const source = Array.isArray(list) ? list : [];
+  const items = [];
+  let changed = false;
+  for (const item of source) {
+    const customer = normalizeCustomer({ ...item });
+    const name = String(customer.name || "").trim();
+    const key = compactText(name);
+    if (!name || reservedCustomerNames.has(name) || seen.has(key)) {
+      changed = true;
+      continue;
+    }
+    seen.add(key);
+    items.push(customer);
+  }
+  if (!items.length || !items.some((customer) => customer.id === "default")) {
+    items.unshift(normalizeCustomer({ id: "default", name: "散客", odds: 47, oddsByType: { ...defaultOdds }, rebateByType: {}, rebate: 0 }));
+    changed = true;
+  }
+  return { items, changed };
 }
 
 function escapeRegExp(value) {
@@ -2225,8 +2250,7 @@ function exposureForNumber(region, n, limit = 0) {
   const autoReport = limit > 0 ? Math.max(0, total - limit) : 0;
   const manualReport = adjust;
   const reportAmount = Math.max(autoReport, manualReport);
-  const reportReturn = reportAmount * adjustOdds;
-  const profit = stake - payout + reportReturn;
+  const profit = total - reportAmount;
   return { n, meta, stake, grossStake, customerRebate, payout, direct, sources, adjust, total, autoReport, reportAmount, profit, excess: 0 };
 }
 
@@ -2675,6 +2699,13 @@ on("adjustRebate", "input", renderRisk);
 on("smartRiskLimitBtn", "click", applySmartRiskLimit);
 on("riskLimit", "input", updateRiskLimitFromInput);
 on("orderSearch", "input", renderOrders);
+
+const customerCleanup = sanitizeCustomers(customers);
+if (customerCleanup.changed) {
+  customers = customerCleanup.items;
+  safeStorageSet(CUSTOMER_KEY, JSON.stringify(customers));
+  saveDataBackup();
+}
 
 if ($("riskLimit") && $("riskRegion")) $("riskLimit").value = money(riskLimitForRegion($("riskRegion").value));
 on("orderInput", "input", resizeOrderInput);
