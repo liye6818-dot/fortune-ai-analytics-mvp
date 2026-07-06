@@ -151,6 +151,28 @@ function validateLicense(key) {
   return { ok: true, expires };
 }
 
+async function validateStandaloneKey(key) {
+  const response = await fetch("/api/auth/standalone-key", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      key,
+      deviceId: deviceCode(),
+      deviceInfo: navigator.userAgent
+    })
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    if (body.error === "standalone_key_bound_to_other_device") {
+      return { ok: false, message: "该密钥已绑定其他设备，请联系管理员重置。" };
+    }
+    if (body.error === "standalone_key_disabled") return { ok: false, message: "该密钥已被禁用，请联系管理员。" };
+    if (body.error === "standalone_key_expired") return { ok: false, message: "该密钥已到期，请联系管理员续期。" };
+    return { ok: false, message: "单机密钥无效，请检查后重试。" };
+  }
+  return { ok: true, expires: body.item?.expiresAt ? new Date(body.item.expiresAt) : null };
+}
+
 function setAppLocked(locked) {
   document.body.classList.toggle("locked", locked);
   $("licenseGate").hidden = !locked;
@@ -163,12 +185,22 @@ function unlockApp(key, expires) {
     sessionStorage.setItem(LICENSE_SESSION_KEY, key);
   }
   setAppLocked(false);
-  $("lastSaved").textContent = `授权到期 ${expires.toLocaleDateString()}`;
+  $("lastSaved").textContent = expires ? `授权到期 ${expires.toLocaleDateString()}` : "单机密钥已授权";
 }
 
-function activateLicense() {
+async function activateLicense() {
   const key = $("licenseInput").value.trim();
-  const result = validateLicense(key);
+  $("licenseMessage").textContent = "正在验证单机密钥...";
+  let result;
+  try {
+    result = await validateStandaloneKey(key);
+  } catch {
+    result = null;
+  }
+  if (!result?.ok && /^FA-/i.test(key)) {
+    result = validateLicense(key);
+  }
+  if (!result) result = { ok: false, message: "无法连接密钥服务器，请稍后重试。" };
   if (!result.ok) {
     $("licenseMessage").textContent = result.message;
     return;
@@ -183,6 +215,9 @@ function initLicenseGate() {
     $("licenseMessage").textContent = "设备识别码已复制";
   });
   $("activateBtn").addEventListener("click", activateLicense);
+  on("onlineModeBtn", "click", () => {
+    $("licenseMessage").textContent = "联机模式当前阶段已预留，暂未开放。请使用单机模式。";
+  });
   $("licenseInput").addEventListener("keydown", (event) => {
     if (event.key === "Enter") activateLicense();
   });

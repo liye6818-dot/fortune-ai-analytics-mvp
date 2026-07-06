@@ -151,6 +151,28 @@ function validateLicense(key) {
   return { ok: true, expires };
 }
 
+async function validateStandaloneKey(key) {
+  const response = await fetch("/api/auth/standalone-key", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      key,
+      deviceId: deviceCode(),
+      deviceInfo: navigator.userAgent
+    })
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    if (body.error === "standalone_key_bound_to_other_device") {
+      return { ok: false, message: "该密钥已绑定其他设备，请联系管理员重置。" };
+    }
+    if (body.error === "standalone_key_disabled") return { ok: false, message: "该密钥已被禁用，请联系管理员。" };
+    if (body.error === "standalone_key_expired") return { ok: false, message: "该密钥已到期，请联系管理员续期。" };
+    return { ok: false, message: "单机密钥无效，请检查后重试。" };
+  }
+  return { ok: true, expires: body.item?.expiresAt ? new Date(body.item.expiresAt) : null };
+}
+
 function setAppLocked(locked) {
   document.body.classList.toggle("locked", locked);
   $("licenseGate").hidden = !locked;
@@ -163,12 +185,22 @@ function unlockApp(key, expires) {
     sessionStorage.setItem(LICENSE_SESSION_KEY, key);
   }
   setAppLocked(false);
-  $("lastSaved").textContent = `授权到期 ${expires.toLocaleDateString()}`;
+  $("lastSaved").textContent = expires ? `授权到期 ${expires.toLocaleDateString()}` : "单机密钥已授权";
 }
 
-function activateLicense() {
+async function activateLicense() {
   const key = $("licenseInput").value.trim();
-  const result = validateLicense(key);
+  $("licenseMessage").textContent = "正在验证单机密钥...";
+  let result;
+  try {
+    result = await validateStandaloneKey(key);
+  } catch {
+    result = null;
+  }
+  if (!result?.ok && /^FA-/i.test(key)) {
+    result = validateLicense(key);
+  }
+  if (!result) result = { ok: false, message: "无法连接密钥服务器，请稍后重试。" };
   if (!result.ok) {
     $("licenseMessage").textContent = result.message;
     return;
@@ -183,6 +215,9 @@ function initLicenseGate() {
     $("licenseMessage").textContent = "设备识别码已复制";
   });
   $("activateBtn").addEventListener("click", activateLicense);
+  on("onlineModeBtn", "click", () => {
+    $("licenseMessage").textContent = "联机模式当前阶段已预留，暂未开放。请使用单机模式。";
+  });
   $("licenseInput").addEventListener("keydown", (event) => {
     if (event.key === "Enter") activateLicense();
   });
@@ -740,7 +775,7 @@ function isDeferredLine(line) {
   return deferredKeywords.some((keyword) => String(line || "").includes(keyword));
 }
 
-function detectType(line) {
+function detectType(line, fallbackType = "特码") {
   const zodiacs = zodiacMatches(line);
   if (/二连肖|二连/.test(line) && zodiacs.length) return "二连肖";
   if (/三连肖|三连/.test(line) && zodiacs.length) return "三连肖";
@@ -767,7 +802,7 @@ function detectType(line) {
   if (/平\s*[0-9]\s*尾|平尾/.test(line)) return "平尾";
   if (/特?[0-4]\s*头|特?[0-9]\s*尾|特?[大小单双]/.test(line)) return "特码";
   if (/半波|红波|蓝波|绿波|波色|红大|红小|蓝大|蓝小|绿大|绿小|红单|蓝单|绿单|红双|蓝双|绿双/.test(line)) return "特码";
-  return "特码";
+  return fallbackType || "特码";
 }
 
 function detectAmount(line) {
@@ -1437,7 +1472,7 @@ function applyForwardAmountToPreviousSegments(ordersList) {
   }
 }
 
-function parseInputText(text, fallbackRegion) {
+function parseInputText(text, fallbackRegion, fallbackType = "特码") {
   const result = [];
   deferredLines = [];
   let pendingNumberLines = [];
@@ -1571,7 +1606,7 @@ function parseInputText(text, fallbackRegion) {
     }
 
     const region = detectRegion(line, fallbackRegion);
-    const type = detectType(line);
+    const type = detectType(line, fallbackType);
     const targets = parseTargets(type, line);
     result.push(makeOrder({ raw: line, region, type, targets, amount }));
   }
@@ -1598,6 +1633,15 @@ function parseOrders() {
     .map((order) => applyCustomerDefaults(order, context.customer));
   renderParsed();
   renderDeferred();
+}
+
+function populateDefaultTypeSelect() {
+  const select = $("defaultType");
+  if (!select) return;
+  const selected = select.value || "特码";
+  select.innerHTML = visiblePlayTypes
+    .map((type) => `<option value="${type}" ${type === selected ? "selected" : ""}>默认${type}</option>`)
+    .join("");
 }
 
 function scheduleParseOrders() {
@@ -2606,6 +2650,14 @@ function closeMobilePanels() {
   });
 }
 
+function playDrawBlessingOnce() {
+  const video = $("drawBlessingVideo");
+  if (!video) return;
+  video.muted = true;
+  video.currentTime = 0;
+  video.play().catch(() => {});
+}
+
 function openMobilePanel(name) {
   closeMobilePanels();
   let target = null;
@@ -2628,10 +2680,12 @@ function openMobilePanel(name) {
   if (!target) return;
   document.body.classList.add("mobile-panel-active");
   target.classList.add("mobile-panel-open");
+  if (name === "draw") playDrawBlessingOnce();
 }
 
 window.FortuneApp = {
   parseOrders,
+  aiParseOrders,
   recognizeImageOrders,
   addCustomer,
   saveCustomerSettings,
@@ -2669,6 +2723,7 @@ function bindControls() {
   on("orderInput", "input", scheduleParseOrders);
   on("orderInput", "paste", () => setTimeout(parseOrders, 0));
   on("defaultRegion", "change", parseOrders);
+  on("defaultType", "change", parseOrders);
   on("entryCustomer", "change", parseOrders);
   on("settingsCustomer", "change", renderCustomerSettings);
     document.querySelectorAll("[data-mobile-panel]").forEach((button) => {
@@ -2695,7 +2750,18 @@ function clearInput() {
   renderParsed();
   renderDeferred();
 }
+
+function bindDrawBlessingVideo() {
+  const video = $("drawBlessingVideo");
+  if (!video) return;
+  playDrawBlessingOnce();
+  video.addEventListener("ended", () => {
+    video.pause();
+  });
+}
+populateDefaultTypeSelect();
 bindControls();
+bindDrawBlessingVideo();
 on("riskRegion", "change", changeRiskRegion);
 on("adjustOdds", "input", renderRisk);
 on("adjustRebate", "input", renderRisk);

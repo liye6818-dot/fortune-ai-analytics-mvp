@@ -13,6 +13,7 @@ import {
   codePreview,
   expiryFromDuration,
   hashSecurityCode,
+  hashStandaloneKey,
   hashSessionToken,
   isExpired,
   makeId,
@@ -70,6 +71,38 @@ function publicSecurityCode(row) {
     lastLoginAt: row.last_login_at,
     lastLoginIp: row.last_login_ip,
     online: Boolean(row.online),
+    deletedAt: row.deleted_at
+  };
+}
+
+function standaloneKeyStatus(row) {
+  if (row.deleted_at) return "deleted";
+  if (row.status !== "active") return "disabled";
+  if (!row.permanent && row.expires_at && Date.now() > new Date(row.expires_at).getTime()) return "expired";
+  if (row.bound_device_id) return "bound";
+  return "unbound";
+}
+
+function publicStandaloneKey(row) {
+  return {
+    id: row.id,
+    keyPreview: row.key_preview,
+    note: row.note,
+    status: standaloneKeyStatus(row),
+    enabled: row.status === "active" && !row.deleted_at,
+    expiresAt: row.expires_at,
+    permanent: Boolean(row.permanent),
+    boundDeviceId: row.bound_device_id,
+    boundAt: row.bound_at,
+    boundIp: row.bound_ip,
+    boundUserAgent: row.bound_user_agent,
+    lastLoginAt: row.last_login_at,
+    lastLoginIp: row.last_login_ip,
+    lastUserAgent: row.last_user_agent,
+    loginCount: row.login_count,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    disabledAt: row.disabled_at,
     deletedAt: row.deleted_at
   };
 }
@@ -258,6 +291,107 @@ app.post("/api/admin/login", async (req, res) => {
   res.json(createSession({ adminUserId: admin.id, mode: "admin", ipAddress: req.ip, deviceInfo: req.get("user-agent") }));
 });
 
+app.get("/api/admin/standalone-keys", requireAdmin(db), (req, res) => {
+  const q = `%${String(req.query.q || "").trim()}%`;
+  const rows = db.prepare(`
+    SELECT * FROM standalone_keys
+    WHERE deleted_at IS NULL
+      AND (? = '%%' OR note LIKE ? OR key_preview LIKE ? OR bound_device_id LIKE ? OR last_login_ip LIKE ?)
+    ORDER BY created_at DESC
+    LIMIT 300
+  `).all(q, q, q, q, q);
+  res.json({ items: rows.map(publicStandaloneKey) });
+});
+
+app.post("/api/admin/standalone-keys", requireAdmin(db), (req, res) => {
+  const { key, note = "", duration = "365", customExpiresAt = null } = req.body || {};
+  if (!key) return res.status(400).json({ error: "key_required" });
+  const expiry = expiryFromDuration(duration, customExpiresAt);
+  const ts = nowIso();
+  const row = {
+    id: makeId("stk"),
+    key_hash: hashStandaloneKey(key),
+    key_preview: codePreview(key),
+    note,
+    status: "active",
+    expires_at: expiry.expiresAt,
+    permanent: expiry.permanent,
+    created_by: req.admin.id,
+    created_at: ts,
+    updated_at: ts
+  };
+  try {
+    db.prepare(`
+      INSERT INTO standalone_keys (
+        id, key_hash, key_preview, note, status, expires_at, permanent,
+        created_by, created_at, updated_at
+      ) VALUES (
+        @id, @key_hash, @key_preview, @note, @status, @expires_at, @permanent,
+        @created_by, @created_at, @updated_at
+      )
+    `).run(row);
+  } catch (error) {
+    if (String(error.message || "").includes("UNIQUE")) {
+      return res.status(409).json({ error: "standalone_key_exists" });
+    }
+    throw error;
+  }
+  writeAuditLog(db, { actorType: "admin", actorId: req.admin.id, action: "create", entityType: "standalone_key", entityId: row.id, ipAddress: req.ip, userAgent: req.get("user-agent") });
+  res.status(201).json({ item: publicStandaloneKey(row) });
+});
+
+app.patch("/api/admin/standalone-keys/:id", requireAdmin(db), (req, res) => {
+  const current = db.prepare("SELECT * FROM standalone_keys WHERE id = ? AND deleted_at IS NULL").get(req.params.id);
+  if (!current) return res.status(404).json({ error: "standalone_key_not_found" });
+  const enabled = req.body.enabled == null ? current.status === "active" : Boolean(req.body.enabled);
+  const next = {
+    note: req.body.note ?? current.note,
+    status: enabled ? "active" : "disabled",
+    disabled_at: enabled ? null : (current.disabled_at || nowIso()),
+    updated_at: nowIso(),
+    id: current.id
+  };
+  if (req.body.duration) {
+    const expiry = expiryFromDuration(req.body.duration, req.body.customExpiresAt);
+    next.permanent = expiry.permanent;
+    next.expires_at = expiry.expiresAt;
+  } else {
+    next.permanent = current.permanent;
+    next.expires_at = current.expires_at;
+  }
+  db.prepare(`
+    UPDATE standalone_keys
+    SET note = @note, status = @status, permanent = @permanent,
+        expires_at = @expires_at, disabled_at = @disabled_at, updated_at = @updated_at
+    WHERE id = @id
+  `).run(next);
+  const item = { ...current, ...next };
+  writeAuditLog(db, { actorType: "admin", actorId: req.admin.id, action: "update", entityType: "standalone_key", entityId: current.id, ipAddress: req.ip, userAgent: req.get("user-agent"), metadata: { before: publicStandaloneKey(current), after: publicStandaloneKey(item) } });
+  res.json({ item: publicStandaloneKey(item) });
+});
+
+app.post("/api/admin/standalone-keys/:id/reset-device", requireAdmin(db), (req, res) => {
+  const current = db.prepare("SELECT * FROM standalone_keys WHERE id = ? AND deleted_at IS NULL").get(req.params.id);
+  if (!current) return res.status(404).json({ error: "standalone_key_not_found" });
+  db.prepare(`
+    UPDATE standalone_keys
+    SET bound_device_id = NULL, bound_at = NULL, bound_ip = NULL,
+        bound_user_agent = NULL, updated_at = ?
+    WHERE id = ?
+  `).run(nowIso(), current.id);
+  writeAuditLog(db, { actorType: "admin", actorId: req.admin.id, action: "reset_device", entityType: "standalone_key", entityId: current.id, ipAddress: req.ip, userAgent: req.get("user-agent") });
+  res.json({ ok: true });
+});
+
+app.delete("/api/admin/standalone-keys/:id", requireAdmin(db), (req, res) => {
+  const current = db.prepare("SELECT * FROM standalone_keys WHERE id = ? AND deleted_at IS NULL").get(req.params.id);
+  if (!current) return res.status(404).json({ error: "standalone_key_not_found" });
+  db.prepare("UPDATE standalone_keys SET deleted_at = ?, status = 'disabled', disabled_at = COALESCE(disabled_at, ?), updated_at = ? WHERE id = ?")
+    .run(nowIso(), nowIso(), nowIso(), current.id);
+  writeAuditLog(db, { actorType: "admin", actorId: req.admin.id, action: "delete", entityType: "standalone_key", entityId: current.id, ipAddress: req.ip, userAgent: req.get("user-agent") });
+  res.json({ ok: true });
+});
+
 app.get("/api/admin/security-codes", requireAdmin(db), (req, res) => {
   const q = `%${String(req.query.q || "").trim()}%`;
   const rows = db.prepare(`
@@ -345,6 +479,49 @@ app.delete("/api/admin/security-codes/:id", requireAdmin(db), (req, res) => {
     .run(nowIso(), nowIso(), req.params.id);
   writeAuditLog(db, { actorType: "admin", actorId: req.admin.id, action: "delete", entityType: "security_code", entityId: req.params.id, ipAddress: req.ip, userAgent: req.get("user-agent") });
   res.json({ ok: true });
+});
+
+app.post("/api/auth/standalone-key", (req, res) => {
+  if (!rateLimit(`standalone:${req.ip}`, 20)) return res.status(429).json({ error: "too_many_attempts" });
+  const { key, deviceId = "", deviceInfo = "" } = req.body || {};
+  if (!key || !deviceId) return res.status(400).json({ error: "key_and_device_required" });
+  const row = db.prepare("SELECT * FROM standalone_keys WHERE key_hash = ? AND deleted_at IS NULL").get(hashStandaloneKey(key));
+  if (!row) {
+    writeAuditLog(db, { actorType: "client", action: "standalone_login_failed", entityType: "standalone_key", ipAddress: req.ip, userAgent: req.get("user-agent"), metadata: { reason: "missing" } });
+    return res.status(401).json({ error: "invalid_standalone_key" });
+  }
+  if (row.status !== "active") {
+    writeAuditLog(db, { actorType: "client", action: "standalone_login_failed", entityType: "standalone_key", entityId: row.id, ipAddress: req.ip, userAgent: req.get("user-agent"), metadata: { reason: "disabled" } });
+    return res.status(403).json({ error: "standalone_key_disabled" });
+  }
+  if (!row.permanent && row.expires_at && Date.now() > new Date(row.expires_at).getTime()) {
+    writeAuditLog(db, { actorType: "client", action: "standalone_login_failed", entityType: "standalone_key", entityId: row.id, ipAddress: req.ip, userAgent: req.get("user-agent"), metadata: { reason: "expired" } });
+    return res.status(403).json({ error: "standalone_key_expired" });
+  }
+  if (row.bound_device_id && row.bound_device_id !== deviceId) {
+    writeAuditLog(db, { actorType: "client", action: "standalone_login_failed", entityType: "standalone_key", entityId: row.id, ipAddress: req.ip, userAgent: req.get("user-agent"), metadata: { reason: "device_mismatch", deviceId } });
+    return res.status(403).json({ error: "standalone_key_bound_to_other_device" });
+  }
+  const ts = nowIso();
+  if (!row.bound_device_id) {
+    db.prepare(`
+      UPDATE standalone_keys
+      SET bound_device_id = ?, bound_at = ?, bound_ip = ?, bound_user_agent = ?,
+          last_login_at = ?, last_login_ip = ?, last_user_agent = ?,
+          login_count = login_count + 1, updated_at = ?
+      WHERE id = ?
+    `).run(deviceId, ts, req.ip, req.get("user-agent") || deviceInfo || "", ts, req.ip, req.get("user-agent") || deviceInfo || "", ts, row.id);
+  } else {
+    db.prepare(`
+      UPDATE standalone_keys
+      SET last_login_at = ?, last_login_ip = ?, last_user_agent = ?,
+          login_count = login_count + 1, updated_at = ?
+      WHERE id = ?
+    `).run(ts, req.ip, req.get("user-agent") || deviceInfo || "", ts, row.id);
+  }
+  const next = db.prepare("SELECT * FROM standalone_keys WHERE id = ?").get(row.id);
+  writeAuditLog(db, { actorType: "client", actorId: row.id, action: "standalone_login", entityType: "standalone_key", entityId: row.id, ipAddress: req.ip, userAgent: req.get("user-agent"), metadata: { deviceId } });
+  res.json({ ok: true, mode: "standalone", item: publicStandaloneKey(next) });
 });
 
 app.get("/api/admin/projects", requireAdmin(db), (_req, res) => {

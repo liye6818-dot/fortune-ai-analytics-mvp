@@ -32,6 +32,29 @@ CREATE TABLE IF NOT EXISTS security_codes (
   deleted_at TEXT
 );
 
+CREATE TABLE IF NOT EXISTS standalone_keys (
+  id TEXT PRIMARY KEY,
+  key_hash TEXT NOT NULL UNIQUE,
+  key_preview TEXT NOT NULL,
+  note TEXT,
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'disabled')),
+  expires_at TEXT,
+  permanent INTEGER NOT NULL DEFAULT 0 CHECK (permanent IN (0, 1)),
+  bound_device_id TEXT,
+  bound_at TEXT,
+  bound_ip TEXT,
+  bound_user_agent TEXT,
+  last_login_at TEXT,
+  last_login_ip TEXT,
+  last_user_agent TEXT,
+  login_count INTEGER NOT NULL DEFAULT 0,
+  created_by TEXT REFERENCES admin_users(id) ON DELETE SET NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  disabled_at TEXT,
+  deleted_at TEXT
+);
+
 CREATE TABLE IF NOT EXISTS projects (
   id TEXT PRIMARY KEY,
   security_code_id TEXT NOT NULL REFERENCES security_codes(id) ON DELETE RESTRICT,
@@ -128,6 +151,8 @@ CREATE TABLE IF NOT EXISTS audit_logs (
 );
 
 CREATE INDEX IF NOT EXISTS idx_security_codes_status ON security_codes(enabled, deleted_at);
+CREATE INDEX IF NOT EXISTS idx_standalone_keys_status ON standalone_keys(status, deleted_at, expires_at);
+CREATE INDEX IF NOT EXISTS idx_standalone_keys_bound ON standalone_keys(bound_device_id, deleted_at);
 CREATE INDEX IF NOT EXISTS idx_projects_security ON projects(security_code_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_members_project ON project_members(project_id, online, last_active_at);
 CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token_hash);

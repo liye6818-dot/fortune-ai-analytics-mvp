@@ -118,6 +118,44 @@
 
       <section id="dashboard" class="hidden">
         <section class="panel">
+          <h2>单机密钥</h2>
+          <div class="grid" style="margin-top:12px;">
+            <input id="standaloneKey" placeholder="单机密钥" />
+            <input id="standaloneNote" placeholder="备注，例如客户名" />
+            <select id="standaloneDuration">
+              <option value="365">365天</option>
+              <option value="180">180天</option>
+              <option value="90">90天</option>
+              <option value="30">30天</option>
+              <option value="permanent">永久</option>
+              <option value="custom">自定义到期</option>
+            </select>
+            <input id="standaloneCustomExpiresAt" placeholder="自定义到期 2027-07-03" />
+            <button id="createStandaloneKeyBtn" type="button">创建单机密钥</button>
+          </div>
+          <p id="standaloneStatus" class="status"></p>
+          <div class="grid" style="grid-template-columns: 1fr auto; margin-top:12px;">
+            <input id="standaloneSearch" placeholder="搜索备注、密钥预览、设备号、IP" />
+            <button id="standaloneSearchBtn" type="button">搜索</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>备注</th>
+                  <th>密钥</th>
+                  <th>状态</th>
+                  <th>到期</th>
+                  <th>绑定设备</th>
+                  <th>最后登录</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody id="standaloneRows"></tbody>
+            </table>
+          </div>
+        </section>
+        <section class="panel">
           <h2>生成安全码</h2>
           <div class="grid" style="margin-top:12px;">
             <input id="code" placeholder="安全码" />
@@ -220,6 +258,16 @@
         return value ? new Date(value).toLocaleString() : "-";
       }
 
+      function esc(value) {
+        return String(value ?? "").replace(/[&<>"']/g, (char) => ({
+          "&": "&amp;",
+          "<": "&lt;",
+          ">": "&gt;",
+          '"': "&quot;",
+          "'": "&#39;"
+        }[char]));
+      }
+
       async function login() {
         $("loginStatus").textContent = "登录中...";
         try {
@@ -257,6 +305,74 @@
         } catch (error) {
           $("createStatus").textContent = error.message;
         }
+      }
+
+      function standaloneStatusText(status) {
+        return {
+          unbound: "未绑定",
+          bound: "已绑定",
+          disabled: "已禁用",
+          expired: "已过期",
+          deleted: "已删除"
+        }[status] || status || "-";
+      }
+
+      async function createStandaloneKey() {
+        $("standaloneStatus").textContent = "保存中...";
+        try {
+          await api("/api/admin/standalone-keys", {
+            method: "POST",
+            body: JSON.stringify({
+              key: $("standaloneKey").value,
+              note: $("standaloneNote").value,
+              duration: $("standaloneDuration").value,
+              customExpiresAt: $("standaloneCustomExpiresAt").value || null
+            })
+          });
+          $("standaloneStatus").textContent = "已创建单机密钥";
+          $("standaloneKey").value = "";
+          await loadStandaloneKeys();
+        } catch (error) {
+          $("standaloneStatus").textContent = error.message;
+        }
+      }
+
+      async function loadStandaloneKeys() {
+        const data = await api(`/api/admin/standalone-keys?q=${encodeURIComponent($("standaloneSearch").value)}`);
+        $("standaloneRows").innerHTML = data.items.map((item) => `
+          <tr>
+            <td><b>${esc(item.note || "-")}</b></td>
+            <td>${esc(item.keyPreview)}</td>
+            <td>${standaloneStatusText(item.status)}</td>
+            <td>${item.permanent ? "永久" : fmt(item.expiresAt)}</td>
+            <td>${esc(item.boundDeviceId || "未绑定")}<br><span class="muted">${fmt(item.boundAt)}</span></td>
+            <td>${fmt(item.lastLoginAt)}<br><span class="muted">${esc(item.lastLoginIp || "")}</span></td>
+            <td>
+              <div class="actions">
+                <button type="button" onclick="toggleStandaloneKey('${item.id}', ${!item.enabled})">${item.enabled ? "禁用" : "启用"}</button>
+                <button type="button" onclick="resetStandaloneDevice('${item.id}')">重置设备</button>
+                <button class="danger" type="button" onclick="deleteStandaloneKey('${item.id}')">删除</button>
+              </div>
+            </td>
+          </tr>
+        `).join("");
+      }
+
+      async function toggleStandaloneKey(id, enabled) {
+        await api(`/api/admin/standalone-keys/${id}`, { method: "PATCH", body: JSON.stringify({ enabled }) });
+        await loadStandaloneKeys();
+      }
+
+      async function resetStandaloneDevice(id) {
+        if (!confirm("确认重置设备绑定？重置后下一台设备可重新绑定。")) return;
+        await api(`/api/admin/standalone-keys/${id}/reset-device`, { method: "POST", body: JSON.stringify({}) });
+        await loadStandaloneKeys();
+      }
+
+      async function deleteStandaloneKey(id) {
+        if (!confirm("确认删除这个单机密钥？")) return;
+        await api(`/api/admin/standalone-keys/${id}`, { method: "DELETE" });
+        await loadStandaloneKeys();
       }
 
       async function loadCodes() {
@@ -324,10 +440,12 @@
       }
 
       async function loadAll() {
-        await Promise.all([loadCodes(), loadProjects(), loadLogs()]);
+        await Promise.all([loadStandaloneKeys(), loadCodes(), loadProjects(), loadLogs()]);
       }
 
       $("loginBtn").onclick = login;
+      $("createStandaloneKeyBtn").onclick = createStandaloneKey;
+      $("standaloneSearchBtn").onclick = loadStandaloneKeys;
       $("createCodeBtn").onclick = createCode;
       $("searchBtn").onclick = loadCodes;
       $("refreshBtn").onclick = loadAll;

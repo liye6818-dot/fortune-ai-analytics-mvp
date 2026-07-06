@@ -1,4 +1,4 @@
-const PWA_VERSION = "20260706_risk_report2";
+const PWA_VERSION = "20260707_standalone_keys";
 const CACHE_NAME = `caishenye88-${PWA_VERSION}`;
 
 const CORE_ASSETS = [
@@ -6,9 +6,9 @@ const CORE_ASSETS = [
   "./index.html?v=20260703_pwa_1",
   "./offline.html?v=20260703_pwa_1",
   "./manifest.json?v=20260703_pwa_1",
-  "./config.js?v=20260706_risk_report2",
-  "./app.js?v=20260706_risk_report2",
-  "./main.js?v=20260706_risk_report2",
+  "./config.js?v=20260707_standalone_keys",
+  "./app.js?v=20260707_standalone_keys",
+  "./main.js?v=20260707_standalone_keys",
   "./styles.css?v=20260703_pwa_1",
   "./icons/icon-192.png?v=20260703_pwa_1",
   "./icons/icon-512.png?v=20260703_pwa_1",
@@ -38,7 +38,7 @@ async function networkFirst(request) {
     if (response && response.ok) await cache.put(request, response.clone());
     return response;
   } catch (error) {
-    return (await cache.match(request)) || cache.match("./index.html?v=20260706_risk_report2") || cache.match("./offline.html?v=20260706_risk_report2");
+    return (await cache.match(request)) || cache.match("./index.html?v=20260707_standalone_keys") || cache.match("./offline.html?v=20260707_standalone_keys");
   }
 }
 

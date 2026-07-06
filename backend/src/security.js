@@ -22,6 +22,10 @@ export function hashSecurityCode(code) {
   return sha256(`${config.securityCodePepper}|${String(code || "").trim()}`);
 }
 
+export function hashStandaloneKey(key) {
+  return sha256(`${config.securityCodePepper}|standalone|${String(key || "").trim()}`);
+}
+
 export function hashSessionToken(token) {
   return sha256(`${config.sessionSecret}|${String(token || "")}`);
 }
