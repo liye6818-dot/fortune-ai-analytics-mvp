@@ -118,9 +118,8 @@
 
       <section id="dashboard" class="hidden">
         <section class="panel">
-          <h2>单机密钥</h2>
+          <h2>单机访问码</h2>
           <div class="grid" style="margin-top:12px;">
-            <input id="standaloneKey" placeholder="单机密钥" />
             <input id="standaloneNote" placeholder="备注，例如客户名" />
             <select id="standaloneDuration">
               <option value="365">365天</option>
@@ -131,17 +130,11 @@
               <option value="custom">自定义到期</option>
             </select>
             <input id="standaloneCustomExpiresAt" placeholder="自定义到期 2027-07-03" />
-            <button id="createStandaloneKeyBtn" type="button">创建单机密钥</button>
-          </div>
-          <div class="grid" style="margin-top:12px;">
-            <input id="legacyKey" placeholder="导入旧版FA激活码" />
-            <input id="legacyDeviceId" placeholder="旧客户设备号，可选" />
-            <input id="legacyNote" placeholder="旧客户备注，例如客户名" />
-            <button id="importLegacyKeyBtn" type="button">导入旧版激活码</button>
+            <button id="createStandaloneKeyBtn" type="button">生成单机访问码</button>
           </div>
           <p id="standaloneStatus" class="status"></p>
           <div class="grid" style="grid-template-columns: 1fr auto; margin-top:12px;">
-            <input id="standaloneSearch" placeholder="搜索备注、密钥预览、设备号、IP" />
+            <input id="standaloneSearch" placeholder="搜索备注、访问码预览、设备号、IP" />
             <button id="standaloneSearchBtn" type="button">搜索</button>
           </div>
           <div class="table-wrap">
@@ -149,7 +142,7 @@
               <thead>
                 <tr>
                   <th>备注</th>
-                  <th>密钥</th>
+                  <th>访问码</th>
                   <th>状态</th>
                   <th>到期</th>
                   <th>绑定设备</th>
@@ -162,9 +155,8 @@
           </div>
         </section>
         <section class="panel">
-          <h2>生成安全码</h2>
+          <h2>生成联机访问码</h2>
           <div class="grid" style="margin-top:12px;">
-            <input id="code" placeholder="安全码" />
             <input id="customerName" placeholder="客户名称" />
             <input id="contact" placeholder="联系方式（可选）" />
             <select id="duration">
@@ -177,27 +169,28 @@
             </select>
             <input id="customExpiresAt" placeholder="自定义到期 2027-07-03" />
             <input id="remark" placeholder="备注" />
-            <button id="createCodeBtn" type="button">生成</button>
+            <button id="createCodeBtn" type="button">生成联机访问码</button>
           </div>
           <p id="createStatus" class="status"></p>
         </section>
 
         <section class="panel">
-          <h2>安全码</h2>
-          <div class="grid" style="grid-template-columns: 1fr auto; margin-top:12px;">
-            <input id="search" placeholder="搜索客户、联系方式、备注、安全码预览" />
+          <h2>联机访问码</h2>
+          <div class="grid" style="grid-template-columns: 1fr auto auto; margin-top:12px;">
+            <input id="search" placeholder="搜索客户、联系方式、备注、访问码预览" />
             <button id="searchBtn" type="button">搜索</button>
+            <button id="kickAllBtn" class="danger" type="button">全部强制下机</button>
           </div>
           <div class="table-wrap">
             <table>
               <thead>
                 <tr>
                   <th>客户</th>
-                  <th>安全码</th>
+                  <th>访问码</th>
                   <th>到期</th>
                   <th>状态</th>
                   <th>登录</th>
-                  <th>在线</th>
+                  <th>在线设备</th>
                   <th>操作</th>
                 </tr>
               </thead>
@@ -248,13 +241,14 @@
     <script>
       let token = "";
       let csrfToken = "";
+      const API_BASE_URL = window.location.protocol === "file:" ? "http://127.0.0.1:3000" : "";
 
       const $ = (id) => document.getElementById(id);
       const api = async (url, options = {}) => {
         const headers = { "content-type": "application/json", ...(options.headers || {}) };
         if (token) headers.authorization = `Bearer ${token}`;
         if (csrfToken) headers["x-csrf-token"] = csrfToken;
-        const response = await fetch(url, { ...options, headers });
+        const response = await fetch(`${API_BASE_URL}${url}`, { ...options, headers });
         const body = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(body.error || "request_failed");
         return body;
@@ -295,10 +289,9 @@
       async function createCode() {
         $("createStatus").textContent = "保存中...";
         try {
-          await api("/api/admin/security-codes", {
+          const result = await api("/api/admin/security-codes", {
             method: "POST",
             body: JSON.stringify({
-              code: $("code").value,
               customerName: $("customerName").value,
               contact: $("contact").value,
               remark: $("remark").value,
@@ -306,7 +299,7 @@
               customExpiresAt: $("customExpiresAt").value || null
             })
           });
-          $("createStatus").textContent = "已生成";
+          $("createStatus").textContent = `已生成联机访问码：${result.code}`;
           await loadCodes();
         } catch (error) {
           $("createStatus").textContent = error.message;
@@ -326,38 +319,15 @@
       async function createStandaloneKey() {
         $("standaloneStatus").textContent = "保存中...";
         try {
-          await api("/api/admin/standalone-keys", {
+          const result = await api("/api/admin/standalone-keys", {
             method: "POST",
             body: JSON.stringify({
-              key: $("standaloneKey").value,
               note: $("standaloneNote").value,
               duration: $("standaloneDuration").value,
               customExpiresAt: $("standaloneCustomExpiresAt").value || null
             })
           });
-          $("standaloneStatus").textContent = "已创建单机密钥";
-          $("standaloneKey").value = "";
-          await loadStandaloneKeys();
-        } catch (error) {
-          $("standaloneStatus").textContent = error.message;
-        }
-      }
-
-      async function importLegacyKey() {
-        $("standaloneStatus").textContent = "导入中...";
-        try {
-          await api("/api/admin/standalone-keys/import-legacy", {
-            method: "POST",
-            body: JSON.stringify({
-              key: $("legacyKey").value,
-              deviceId: $("legacyDeviceId").value,
-              note: $("legacyNote").value
-            })
-          });
-          $("standaloneStatus").textContent = "已导入旧版激活码";
-          $("legacyKey").value = "";
-          $("legacyDeviceId").value = "";
-          $("legacyNote").value = "";
+          $("standaloneStatus").textContent = `已生成单机访问码：${result.key}`;
           await loadStandaloneKeys();
         } catch (error) {
           $("standaloneStatus").textContent = error.message;
@@ -397,7 +367,7 @@
       }
 
       async function deleteStandaloneKey(id) {
-        if (!confirm("确认删除这个单机密钥？")) return;
+        if (!confirm("确认删除这个单机访问码？")) return;
         await api(`/api/admin/standalone-keys/${id}`, { method: "DELETE" });
         await loadStandaloneKeys();
       }
@@ -411,11 +381,12 @@
             <td>${item.permanent ? "永久" : fmt(item.expiresAt)}</td>
             <td>${item.enabled ? "启用" : "禁用"}</td>
             <td>${item.loginCount}<br><span class="muted">${fmt(item.lastLoginAt)}</span></td>
-            <td>${item.online ? "在线" : "离线"}</td>
+            <td>${Number(item.onlineCount || 0)} 台<br><span class="muted">${item.online ? "在线" : "离线"}</span></td>
             <td>
               <div class="actions">
                 <button type="button" onclick="renew('${item.id}')">续期365</button>
                 <button type="button" onclick="toggleCode('${item.id}', ${!item.enabled})">${item.enabled ? "禁用" : "启用"}</button>
+                <button type="button" onclick="kickCode('${item.id}')">强制下机</button>
                 <button class="danger" type="button" onclick="deleteCode('${item.id}')">删除</button>
               </div>
             </td>
@@ -431,6 +402,20 @@
       async function toggleCode(id, enabled) {
         await api(`/api/admin/security-codes/${id}`, { method: "PATCH", body: JSON.stringify({ enabled }) });
         await loadCodes();
+      }
+
+      async function kickCode(id) {
+        if (!confirm("确认强制该访问码所有在线设备下机？")) return;
+        await api(`/api/admin/security-codes/${id}/kick`, { method: "POST", body: JSON.stringify({}) });
+        await loadCodes();
+        await loadProjects();
+      }
+
+      async function kickAllCodes() {
+        if (!confirm("确认强制所有联机设备下机？")) return;
+        await api("/api/admin/security-codes/kick-all", { method: "POST", body: JSON.stringify({}) });
+        await loadCodes();
+        await loadProjects();
       }
 
       async function deleteCode(id) {
@@ -472,10 +457,10 @@
 
       $("loginBtn").onclick = login;
       $("createStandaloneKeyBtn").onclick = createStandaloneKey;
-      $("importLegacyKeyBtn").onclick = importLegacyKey;
       $("standaloneSearchBtn").onclick = loadStandaloneKeys;
       $("createCodeBtn").onclick = createCode;
       $("searchBtn").onclick = loadCodes;
+      $("kickAllBtn").onclick = kickAllCodes;
       $("refreshBtn").onclick = loadAll;
     </script>
   </body>

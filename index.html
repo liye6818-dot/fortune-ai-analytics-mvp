@@ -2,13 +2,28 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
+    <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+    <script>
+      (() => {
+        const keys = [
+          "fortune_ai_analytics_mvp_license",
+          "fortune_ai_analytics_mvp_standalone_license_v2",
+          "fortune_ai_analytics_mvp_access_code_v3"
+        ];
+        for (const store of [localStorage, sessionStorage]) {
+          for (const key of keys) store.removeItem(key);
+        }
+      })();
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>财神爷88</title>
-    <meta name="application-name" content="财神爷88" />
+    <title>财神爷</title>
+    <meta name="application-name" content="财神爷" />
     <meta name="theme-color" content="#5443e8" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-title" content="财神爷88" />
+    <meta name="apple-mobile-web-app-title" content="财神爷" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <link rel="manifest" href="./manifest.json?v=20260703_pwa_1" />
     <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png?v=20260703_pwa_1" />
@@ -75,30 +90,24 @@
         <div class="license-mark">单</div>
       </div>
       <div class="license-card">
-        <div class="license-icon">¥</div>
-        <h1>收单助手</h1>
-        <p>请选择入口，单机和联机数据互不混用</p>
-        <label>单机模式 · 单机密钥
-          <input id="licenseInput" autocomplete="off" placeholder="输入后台生成的单机密钥" />
+        <div class="license-icon">财</div>
+        <h1>财神爷</h1>
+        <p>请输入访问码后进入</p>
+        <label>访问码
+          <input id="licenseInput" type="password" autocomplete="off" placeholder="请输入访问码" />
         </label>
         <label class="license-remember">
           <input id="rememberLicense" type="checkbox" checked />
-          <span>记住单机密钥</span>
+          <span>下次自动进入</span>
         </label>
-        <button id="activateBtn" type="button">进入单机模式 →</button>
-        <label>联机模式 · 安全码
-          <input id="onlineCodeInput" autocomplete="off" placeholder="联机安全码，当前阶段预留" />
-        </label>
-        <button id="onlineModeBtn" class="plain" type="button">联机模式预留</button>
-        <button id="copyDeviceBtn" class="plain" type="button">复制设备识别码</button>
+        <button id="activateBtn" type="button">进入 →</button>
         <div id="licenseMessage" class="license-message"></div>
-        <div class="device-code">设备识别码 <b id="deviceCodeText"></b></div>
       </div>
     </section>
 
     <header class="app-header">
       <div>
-        <h1>财神爷录单宝</h1>
+        <h1>财神爷</h1>
         <p>我要录单、开奖算奖、特码调单模拟</p>
         <span class="privacy-badge">隐私模式：注单仅本机浏览器保存</span>
       </div>
@@ -374,9 +383,9 @@
 
     </main>
 
-    <script src="./config.js?v=20260707_force_new_keys"></script>
-    <script src="./app.js?v=20260707_force_new_keys"></script>
-    <script src="./pwa.js?v=20260703_pwa_1"></script>
+    <script src="./config.js?v=20260707_force_auth2"></script>
+    <script src="./app.js?v=20260707_force_auth2"></script>
+    <script src="./pwa.js?v=20260707_force_auth2"></script>
   </body>
 </html>
 

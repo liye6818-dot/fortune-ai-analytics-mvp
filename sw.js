@@ -1,69 +1,28 @@
-const PWA_VERSION = "20260707_force_new_keys";
-const CACHE_NAME = `caishenye88-${PWA_VERSION}`;
-
-const CORE_ASSETS = [
-  "./",
-  "./index.html?v=20260703_pwa_1",
-  "./offline.html?v=20260703_pwa_1",
-  "./manifest.json?v=20260703_pwa_1",
-  "./config.js?v=20260707_force_new_keys",
-  "./app.js?v=20260707_force_new_keys",
-  "./main.js?v=20260707_force_new_keys",
-  "./styles.css?v=20260703_pwa_1",
-  "./icons/icon-192.png?v=20260703_pwa_1",
-  "./icons/icon-512.png?v=20260703_pwa_1",
-  "./icons/maskable-512.png?v=20260703_pwa_1",
-  "./icons/apple-touch-icon.png?v=20260703_pwa_1"
-];
+const PWA_VERSION = "20260707_force_auth2";
 
 self.addEventListener("install", (event) => {
   self.skipWaiting();
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(CORE_ASSETS))
-  );
+  event.waitUntil(caches.keys().then((keys) => Promise.all(keys.map((key) => caches.delete(key)))));
 });
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys()
-      .then((keys) => Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))))
+      .then((keys) => Promise.all(keys.map((key) => caches.delete(key))))
       .then(() => self.clients.claim())
+      .then(() => self.clients.matchAll({ type: "window", includeUncontrolled: true }))
+      .then((clients) => {
+        for (const client of clients) {
+          const url = new URL(client.url);
+          if (url.origin === self.location.origin) {
+            url.searchParams.set("auth", PWA_VERSION);
+            client.navigate(url.href);
+          }
+        }
+      })
   );
 });
 
-async function networkFirst(request) {
-  const cache = await caches.open(CACHE_NAME);
-  try {
-    const response = await fetch(request);
-    if (response && response.ok) await cache.put(request, response.clone());
-    return response;
-  } catch (error) {
-    return (await cache.match(request)) || cache.match("./index.html?v=20260707_force_new_keys") || cache.match("./offline.html?v=20260707_force_new_keys");
-  }
-}
-
-async function cacheFirst(request) {
-  const cached = await caches.match(request);
-  if (cached) return cached;
-  const response = await fetch(request);
-  if (response && response.ok) {
-    const cache = await caches.open(CACHE_NAME);
-    await cache.put(request, response.clone());
-  }
-  return response;
-}
-
 self.addEventListener("fetch", (event) => {
-  const request = event.request;
-  if (request.method !== "GET") return;
-
-  const url = new URL(request.url);
-  if (url.origin !== self.location.origin) return;
-
-  if (request.mode === "navigate" || request.destination === "document") {
-    event.respondWith(networkFirst(request));
-    return;
-  }
-
-  event.respondWith(cacheFirst(request));
+  event.respondWith(fetch(event.request, { cache: "no-store" }));
 });

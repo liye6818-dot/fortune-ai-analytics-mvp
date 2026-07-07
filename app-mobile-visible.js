@@ -4,7 +4,9 @@ const CUSTOMER_KEY = "fortune_ai_analytics_mvp_customers";
 const ORDER_STORAGE_KEY = "fortune_ai_analytics_mvp_orders";
 const ADJUST_STORAGE_KEY = "fortune_ai_analytics_mvp_adjustments";
 const REPORTED_STORAGE_KEY = "fortune_ai_analytics_mvp_reported";
-const LICENSE_SESSION_KEY = "fortune_ai_analytics_mvp_license";
+const LEGACY_LICENSE_SESSION_KEY = "fortune_ai_analytics_mvp_license";
+const OLD_LICENSE_SESSION_KEY = "fortune_ai_analytics_mvp_standalone_license_v2";
+const LICENSE_SESSION_KEY = "fortune_ai_analytics_mvp_access_code_v3";
 const DEVICE_KEY = "fortune_ai_analytics_mvp_device";
 const DATA_BACKUP_KEY = "fortune_ai_analytics_mvp_backup";
 const APP_CONFIG = window.APP_CONFIG || {};
@@ -12,6 +14,17 @@ const MACAU_DRAW_API = APP_CONFIG.MACAU_DRAW_API || "";
 const HONGKONG_DRAW_API = APP_CONFIG.HONGKONG_DRAW_API || "";
 const CORS_PROXY = APP_CONFIG.CORS_PROXY || "";
 const TESSERACT_SCRIPT_URL = APP_CONFIG.TESSERACT_SCRIPT_URL || "";
+const LOCAL_AI_BASE_URL = APP_CONFIG.LOCAL_AI_BASE_URL || "";
+const LOCAL_AI_MODEL = APP_CONFIG.LOCAL_AI_MODEL || "";
+const API_BASE_URL = String(APP_CONFIG.API_BASE_URL || (location.protocol === "file:" ? "http://127.0.0.1:3000" : "")).replace(/\/+$/, "");
+
+function apiUrl(path) {
+  return `${API_BASE_URL}${path}`;
+}
+
+function normalizeAccessCode(code) {
+  return String(code || "").trim().toUpperCase().replace(/\s+/g, "");
+}
 
 const zodiacOrder = ["鼠", "牛", "虎", "兔", "龙", "蛇", "马", "羊", "猴", "鸡", "狗", "猪"];
 const currentYearZodiac = "马";
@@ -48,14 +61,13 @@ const defaultOdds = {
   "八不中": 1,
   "九不中": 1,
   "十不中": 1,
-  "两面": 1.95,
   "波色": 2.8,
   "半波": 5.6
 };
 const visiblePlayTypes = [
   "特码", "特肖", "一肖", "主肖", "平肖", "二连肖", "三连肖", "四连肖", "五连肖", "平尾", "二连尾", "三连尾", "四连尾", "五连尾",
   "五不中", "六不中", "七不中", "八不中", "九不中", "十不中",
-  "二中二", "三中三", "特串", "波色", "半波", "两面"
+  "二中二", "三中三", "特串", "波色", "半波"
 ];
 const oddsSettingKeys = [
   "特码", "一肖", "主肖",
@@ -79,6 +91,8 @@ let adjustments = loadJson(ADJUST_STORAGE_KEY, {});
 let reported = loadJson(REPORTED_STORAGE_KEY, {});
 let riskSettings = normalizeRiskSettings(loadJson(RISK_SETTINGS_KEY, { limitByRegion: { 澳门: 0, 香港: 0 } }));
 let customers = loadJson(CUSTOMER_KEY, [{ id: "default", name: "散客", odds: 47, oddsByType: { ...defaultOdds }, rebateByType: {}, rebate: 0 }]);
+let accessSession = null;
+let heartbeatTimer = null;
 
 const $ = (id) => document.getElementById(id);
 
@@ -120,36 +134,52 @@ function deviceCode() {
   return code;
 }
 
-function licenseSignature(device, expiresAt) {
-  return simpleHash(`FORTUNE|${device}|${expiresAt}|PRIVATE-MVP-2026`);
+async function validateStandaloneKey(key) {
+  const response = await fetch(apiUrl("/api/auth/standalone-key"), {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      key,
+      deviceId: deviceCode(),
+      deviceInfo: navigator.userAgent
+    })
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    if (body.error === "standalone_key_bound_to_other_device") {
+      return { ok: false, message: "访问码状态异常，请联系管理员处理。" };
+    }
+    if (body.error === "standalone_key_disabled") return { ok: false, message: "访问码已失效，请联系管理员处理。" };
+    if (body.error === "standalone_key_expired") return { ok: false, message: "访问码已失效，请联系管理员处理。" };
+    return { ok: false, message: "访问码无效，请检查后重试。" };
+  }
+  return { ok: true, expires: body.item?.expiresAt ? new Date(body.item.expiresAt) : null };
 }
 
-function buildLicenseKey(device, days) {
-  const expiresAt = new Date(Date.now() + Number(days) * 86400000).toISOString().slice(0, 10).replace(/-/g, "");
-  return `FA-${expiresAt}-${licenseSignature(device, expiresAt)}`;
+async function validateSecurityCode(code) {
+  const response = await fetch(apiUrl("/api/auth/security-code"), {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      code,
+      deviceId: deviceCode(),
+      deviceInfo: navigator.userAgent
+    })
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) return { ok: false, message: "访问码无效，请检查后重试。" };
+  return {
+    ok: true,
+    expires: body.securityCode?.expiresAt ? new Date(body.securityCode.expiresAt) : null,
+    session: { token: body.token, csrfToken: body.csrfToken }
+  };
 }
 
-function parseLicenseKey(key) {
-  const match = String(key || "").trim().toUpperCase().match(/^FA-(\d{8})-([0-9A-F]{8})$/);
-  if (!match) return null;
-  return { expiresAt: match[1], signature: match[2] };
-}
-
-function licenseExpiryDate(compactDate) {
-  const year = Number(compactDate.slice(0, 4));
-  const month = Number(compactDate.slice(4, 6)) - 1;
-  const day = Number(compactDate.slice(6, 8));
-  return new Date(year, month, day, 23, 59, 59);
-}
-
-function validateLicense(key) {
-  const parsedKey = parseLicenseKey(key);
-  const device = deviceCode();
-  if (!parsedKey) return { ok: false, message: "激活码格式不正确" };
-  if (parsedKey.signature !== licenseSignature(device, parsedKey.expiresAt)) return { ok: false, message: "激活码和本设备不匹配" };
-  const expires = licenseExpiryDate(parsedKey.expiresAt);
-  if (Date.now() > expires.getTime()) return { ok: false, message: "激活码已到期" };
-  return { ok: true, expires };
+async function validateAccessCode(code) {
+  const standalone = await validateStandaloneKey(code);
+  if (standalone.ok) return standalone;
+  if (String(code || "").trim().toUpperCase().startsWith("CJY-DJ-")) return standalone;
+  return validateSecurityCode(code);
 }
 
 function setAppLocked(locked) {
@@ -157,45 +187,83 @@ function setAppLocked(locked) {
   $("licenseGate").hidden = !locked;
 }
 
-function unlockApp(key, expires) {
-  if ($("rememberLicense").checked) {
-    localStorage.setItem(LICENSE_SESSION_KEY, key);
-  } else {
-    sessionStorage.setItem(LICENSE_SESSION_KEY, key);
-  }
-  setAppLocked(false);
-  $("lastSaved").textContent = `授权到期 ${expires.toLocaleDateString()}`;
+function clearAccessCache() {
+  localStorage.removeItem(LEGACY_LICENSE_SESSION_KEY);
+  sessionStorage.removeItem(LEGACY_LICENSE_SESSION_KEY);
+  localStorage.removeItem(OLD_LICENSE_SESSION_KEY);
+  sessionStorage.removeItem(OLD_LICENSE_SESSION_KEY);
+  localStorage.removeItem(LICENSE_SESSION_KEY);
+  sessionStorage.removeItem(LICENSE_SESSION_KEY);
 }
 
-function activateLicense() {
-  const key = $("licenseInput").value.trim();
-  const result = validateLicense(key);
+function lockFromServer() {
+  accessSession = null;
+  if (heartbeatTimer) clearInterval(heartbeatTimer);
+  heartbeatTimer = null;
+  clearAccessCache();
+  $("licenseMessage").textContent = "访问码已下线，请重新进入。";
+  setAppLocked(true);
+}
+
+async function sendHeartbeat() {
+  if (!accessSession?.token) return;
+  const response = await fetch(apiUrl("/api/session/heartbeat"), {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${accessSession.token}`,
+      "x-csrf-token": accessSession.csrfToken || ""
+    },
+    body: JSON.stringify({ deviceInfo: navigator.userAgent })
+  }).catch(() => null);
+  if (!response || !response.ok) lockFromServer();
+}
+
+function startHeartbeat(session) {
+  accessSession = session || null;
+  if (heartbeatTimer) clearInterval(heartbeatTimer);
+  heartbeatTimer = null;
+  if (!accessSession?.token) return;
+  sendHeartbeat();
+  heartbeatTimer = setInterval(sendHeartbeat, 30000);
+}
+
+function unlockApp(key, expires, session = null) {
+  clearAccessCache();
+  setAppLocked(false);
+  $("lastSaved").textContent = expires ? `授权到期 ${expires.toLocaleDateString()}` : "已授权";
+  startHeartbeat(session);
+}
+
+async function activateLicense() {
+  const key = normalizeAccessCode($("licenseInput").value);
+  $("licenseInput").value = key;
+  $("licenseMessage").textContent = "正在验证访问码...";
+  let result;
+  try {
+    result = await validateAccessCode(key);
+  } catch {
+    result = null;
+  }
+  if (!result) result = { ok: false, message: "无法连接访问服务，请稍后重试。" };
   if (!result.ok) {
     $("licenseMessage").textContent = result.message;
     return;
   }
-  unlockApp(key, result.expires);
+  unlockApp(key, result.expires, result.session);
 }
 
 function initLicenseGate() {
-  $("deviceCodeText").textContent = deviceCode();
-  $("copyDeviceBtn").addEventListener("click", async () => {
-    await navigator.clipboard?.writeText(deviceCode()).catch(() => {});
-    $("licenseMessage").textContent = "设备识别码已复制";
-  });
+  clearAccessCache();
+  const remember = $("rememberLicense");
+  if (remember) {
+    remember.checked = false;
+    remember.closest("label")?.setAttribute("hidden", "");
+  }
   $("activateBtn").addEventListener("click", activateLicense);
   $("licenseInput").addEventListener("keydown", (event) => {
     if (event.key === "Enter") activateLicense();
   });
-  const savedKey = localStorage.getItem(LICENSE_SESSION_KEY) || sessionStorage.getItem(LICENSE_SESSION_KEY);
-  if (savedKey) {
-    $("licenseInput").value = savedKey;
-    const result = validateLicense(savedKey);
-    if (result.ok) {
-      unlockApp(savedKey, result.expires);
-      return;
-    }
-  }
   setAppLocked(true);
 }
 
@@ -337,6 +405,73 @@ function currentCustomer() {
 
 function customerById(id) {
   return normalizeCustomer(customers.find((customer) => customer.id === id) || customers[0]);
+}
+
+const reservedCustomerNames = new Set(["上报", "已上报", "未上报", "待上报", "刚刚", "全部", "已提交", "未提交"]);
+
+function compactText(value) {
+  return String(value || "").replace(/[\s:：,，.。;；、\-_/\\|()[\]{}<>《》【】"'“”‘’]/g, "").toLowerCase();
+}
+
+function sanitizeCustomers(list) {
+  const seen = new Set();
+  const source = Array.isArray(list) ? list : [];
+  const items = [];
+  let changed = false;
+  for (const item of source) {
+    const customer = normalizeCustomer({ ...item });
+    const name = String(customer.name || "").trim();
+    const key = compactText(name);
+    if (!name || reservedCustomerNames.has(name) || seen.has(key)) {
+      changed = true;
+      continue;
+    }
+    seen.add(key);
+    items.push(customer);
+  }
+  if (!items.length || !items.some((customer) => customer.id === "default")) {
+    items.unshift(normalizeCustomer({ id: "default", name: "散客", odds: 47, oddsByType: { ...defaultOdds }, rebateByType: {}, rebate: 0 }));
+    changed = true;
+  }
+  return { items, changed };
+}
+
+function escapeRegExp(value) {
+  return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function findCustomerInText(text) {
+  const compact = compactText(text);
+  return customers
+    .filter((customer) => customer?.name)
+    .sort((a, b) => String(b.name).length - String(a.name).length)
+    .find((customer) => {
+      const name = compactText(customer.name);
+      if (!name) return false;
+      if (name.length >= 2) return compact.includes(name);
+      return new RegExp(`(^|[^\\u4e00-\\u9fa5A-Za-z0-9])${escapeRegExp(customer.name)}(?=$|[^\\u4e00-\\u9fa5A-Za-z0-9]|香|港|澳|\\d)`, "i").test(String(text || ""));
+    }) || null;
+}
+
+function removeCustomerNameFromText(text, customer) {
+  if (!customer?.name) return text;
+  return String(text || "").replace(new RegExp(escapeRegExp(customer.name), "gi"), " ");
+}
+
+function parseInputContext(text) {
+  const detectedCustomer = findCustomerInText(text);
+  const region = detectRegion(text, $("defaultRegion").value);
+  const customer = detectedCustomer ? normalizeCustomer(detectedCustomer) : currentCustomer();
+  return {
+    customer,
+    region,
+    text: removeCustomerNameFromText(text, detectedCustomer)
+  };
+}
+
+function applyParseContextToControls(context) {
+  if (context.customer?.id && $("entryCustomer")) $("entryCustomer").value = context.customer.id;
+  if (context.region && $("defaultRegion")) $("defaultRegion").value = context.region;
 }
 
 function orderTotalUnits(order) {
@@ -640,8 +775,32 @@ function numbersForTail(tail) {
     .map(pad);
 }
 
+function numbersForHead(head) {
+  const normalized = Number(head);
+  const start = normalized === 0 ? 1 : normalized * 10 + 1;
+  const end = normalized === 0 ? 9 : Math.min(normalized * 10 + 9, 49);
+  return Array.from({ length: Math.max(0, end - start + 1) }, (_, i) => pad(start + i));
+}
+
+function specialNumberGroupTargets(text) {
+  const source = String(text || "");
+  const targets = [];
+  const hasSpecialPrefix = /特/.test(source);
+  if (/(?:特)?小数|(?:特)?小号|(?:特)?小码/.test(source) && !/[单双]/.test(source)) targets.push(...Array.from({ length: 24 }, (_, i) => i + 1).map(pad));
+  else if (/(?:特)?大数|(?:特)?大号|(?:特)?大码/.test(source) && !/[单双]/.test(source)) targets.push(...Array.from({ length: 25 }, (_, i) => i + 25).map(pad));
+  else if (/小/.test(source) && /双/.test(source)) targets.push(...Array.from({ length: 24 }, (_, i) => i + 1).filter((n) => n % 2 === 0).map(pad));
+  else if (/小/.test(source) && /单/.test(source)) targets.push(...Array.from({ length: 24 }, (_, i) => i + 1).filter((n) => n % 2 === 1).map(pad));
+  else if (/大/.test(source) && /双/.test(source)) targets.push(...Array.from({ length: 25 }, (_, i) => i + 25).filter((n) => n % 2 === 0).map(pad));
+  else if (/大/.test(source) && /单/.test(source)) targets.push(...Array.from({ length: 25 }, (_, i) => i + 25).filter((n) => n % 2 === 1).map(pad));
+  for (const match of source.matchAll(/(?:特)?([0-4])\s*头/g)) targets.push(...numbersForHead(match[1]));
+  for (const match of source.matchAll(/特?([0-9])\s*尾/g)) {
+    if (hasSpecialPrefix || !/平\s*[0-9]\s*尾|平尾|连尾/.test(source)) targets.push(...numbersForTail(match[1]));
+  }
+  return uniqueTargets(targets);
+}
+
 function detectRegion(line, fallback) {
-  if (/港|香港/.test(line)) return "香港";
+  if (/香|港|香港/.test(line)) return "香港";
   if (/澳|澳门/.test(line)) return "澳门";
   return fallback;
 }
@@ -674,9 +833,9 @@ function detectType(line, fallbackType = "特码") {
   if (/特肖|特.*肖/.test(line)) return "特肖";
   if (/主肖/.test(line)) return "主肖";
   if (/平肖|平特|一肖/.test(line) || new RegExp(`平\\s*[${zodiacOrder.join("")}]`).test(line)) return "一肖";
-  if (/平尾/.test(line)) return "平尾";
+  if (/平\s*[0-9]\s*尾|平尾/.test(line)) return "平尾";
+  if (/特?[0-4]\s*头|特?[0-9]\s*尾|特?[大小单双]/.test(line)) return "特码";
   if (/半波|红波|蓝波|绿波|波色|红大|红小|蓝大|蓝小|绿大|绿小|红单|蓝单|绿单|红双|蓝双|绿双/.test(line)) return "特码";
-  if (/[大小单双]/.test(line) && /两面|特码/.test(line)) return "两面";
   return fallbackType || "特码";
 }
 
@@ -749,6 +908,8 @@ function stripLooseTrailingAmount(line) {
 
 function parseTargets(type, text) {
   const targetText = stripAmountText(text);
+  const specialGroup = type === "特码" ? specialNumberGroupTargets(targetText) : [];
+  if (specialGroup.length) return specialGroup;
   const wave = waveTargets(targetText);
   if (wave.length) return wave;
   const numbers = extractNumbers(targetText);
@@ -764,7 +925,6 @@ function parseTargets(type, text) {
     return ["红大", "红小", "红单", "红双", "蓝大", "蓝小", "蓝单", "蓝双", "绿大", "绿小", "绿单", "绿双"]
       .filter((v) => targetText.includes(v));
   }
-  if (type === "两面") return ["大", "小", "单", "双"].filter((v) => targetText.includes(v));
   return numbers;
 }
 
@@ -937,12 +1097,40 @@ function parseNumberSlashAmountGroups(line, fallbackRegion) {
   return groups.length >= 2 ? groups : [];
 }
 
+function parseCommaAmountStream(line, fallbackRegion) {
+  const normalized = normalizeText(line);
+  if (!/[元米块斤]|各|每/.test(normalized)) return [];
+  const region = detectRegion(normalized, fallbackRegion);
+  const amount = "([0-9]+(?:\\.[0-9]+)?|[一二两三四五六七八九十百]+)";
+  const amountPattern = new RegExp(`((?:各数|每数|个数|每个|各|每)\\s*)?${amount}\\s*(?:元|米|块|斤)`, "g");
+  const groups = [];
+  let cursor = 0;
+  let match;
+  while ((match = amountPattern.exec(normalized)) !== null) {
+    const source = normalized.slice(cursor, match.index);
+    const parsedAmount = chineseAmountToNumber(match[2]) || 0;
+    const specialTargets = specialNumberGroupTargets(source);
+    const numbers = specialTargets.length ? specialTargets : extractNumbers(source);
+    if (parsedAmount && numbers.length) {
+      groups.push(makeOrder({
+        raw: `${source} ${match[0]}`.trim(),
+        region,
+        type: "特码",
+        targets: match[1] || specialTargets.length ? numbers : [numbers[numbers.length - 1]],
+        amount: parsedAmount
+      }));
+    }
+    cursor = amountPattern.lastIndex;
+  }
+  return groups.length >= 2 ? groups : [];
+}
+
 function isEditableDeferredLine(line) {
   return /连肖|[二三四五]连/.test(String(line || "")) && zodiacMatches(line).length > 0;
 }
 
 function hasPlayKeyword(line) {
-  return /连肖|[二三四五]连|[二三四五]连尾|[五六七八九十]不中|[5-9]不中|10不中|二中二|2\s*中\s*2|对碰|拖|三中三|3中3|特串|特肖|平肖|平特|平[鼠牛虎兔龙蛇马羊猴鸡狗猪]|一肖|主肖|平尾|半波|波色|红波|蓝波|绿波|两面/.test(String(line || ""));
+  return /连肖|[二三四五]连|[二三四五]连尾|[五六七八九十]不中|[5-9]不中|10不中|二中二|2\s*中\s*2|对碰|拖|三中三|3中3|特串|特肖|平肖|平特|平[鼠牛虎兔龙蛇马羊猴鸡狗猪]|一肖|主肖|平尾|半波|波色|红波|蓝波|绿波/.test(String(line || ""));
 }
 
 function makeEditableDeferredOrder(line, fallbackRegion) {
@@ -1255,6 +1443,12 @@ function parseInputAsEditableSegments(lines, fallbackRegion) {
       continue;
     }
 
+    const commaAmountGroups = parseCommaAmountStream(line, fallbackRegion);
+    if (commaAmountGroups.length) {
+      result.push(...commaAmountGroups);
+      continue;
+    }
+
     if (hasPlayKeyword(line)) {
       result.push(makeKeywordOrder(line, fallbackRegion));
       continue;
@@ -1369,6 +1563,13 @@ function parseInputText(text, fallbackRegion, fallbackType = "特码") {
       continue;
     }
 
+    const commaAmountGroups = parseCommaAmountStream(line, fallbackRegion);
+    if (commaAmountGroups.length) {
+      pendingNumberLines = [];
+      result.push(...commaAmountGroups);
+      continue;
+    }
+
     if (hasPlayKeyword(line)) {
       pendingNumberLines = [];
       result.push(makeKeywordOrder(line, fallbackRegion));
@@ -1458,11 +1659,12 @@ function refreshParsedOrder(index) {
 }
 
 function parseOrders() {
-  const customer = currentCustomer();
-  parsed = parseInputText($("orderInput").value, $("defaultRegion").value, $("defaultType")?.value || "特码")
+  const context = parseInputContext($("orderInput").value);
+  applyParseContextToControls(context);
+  parsed = parseInputText(context.text, context.region, $("defaultType")?.value || "特码")
     .flatMap(expandZodiacComboOrder)
     .flatMap(expandMainZodiacSingles)
-    .map((order) => applyCustomerDefaults(order, customer));
+    .map((order) => applyCustomerDefaults(order, context.customer));
   renderParsed();
   renderDeferred();
 }
@@ -1484,6 +1686,121 @@ function scheduleParseOrders() {
 function setOcrStatus(text) {
   const status = $("ocrStatus");
   if (status) status.textContent = text || "";
+}
+
+function localAiCandidates() {
+  return [LOCAL_AI_BASE_URL || "http://127.0.0.1:11434"];
+}
+
+function isAllowedLocalAiUrl(baseUrl) {
+  try {
+    const url = new URL(baseUrl);
+    return ["127.0.0.1", "localhost", "[::1]"].includes(url.hostname) && url.protocol === "http:";
+  } catch {
+    return false;
+  }
+}
+
+function aiNormalizePrompt(text) {
+  return `把下面的六合彩下注内容整理成系统容易解析的纯文本。
+只输出整理后的订单行，不要解释，不要 Markdown，不要 JSON。
+保留区域、玩法、号码/生肖/尾数、金额。
+可用格式示例：
+澳门 特码 06 08 各数 50
+香港 特肖 鼠牛 各肖 20
+澳门 平尾 5尾 9尾 各 100
+
+原始内容：
+${text}`;
+}
+
+async function fetchWithTimeout(url, options = {}, timeoutMs = 45000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function firstOllamaModel(baseUrl) {
+  if (LOCAL_AI_MODEL) return LOCAL_AI_MODEL;
+  const response = await fetchWithTimeout(`${baseUrl}/api/tags`, { cache: "no-store" }, 4000);
+  if (!response.ok) throw new Error("ollama-tags-failed");
+  const data = await response.json();
+  return data?.models?.[0]?.name || "";
+}
+
+async function callOllama(baseUrl, prompt) {
+  const model = await firstOllamaModel(baseUrl);
+  if (!model) throw new Error("ollama-model-missing");
+  const response = await fetchWithTimeout(`${baseUrl}/api/generate`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ model, prompt, stream: false, options: { temperature: 0.1 } })
+  });
+  if (!response.ok) throw new Error("ollama-generate-failed");
+  const data = await response.json();
+  return String(data?.response || "").trim();
+}
+
+function cleanAiOrderText(text) {
+  return String(text || "")
+    .replace(/```[\w-]*|```/g, "")
+    .replace(/^\s*[-*]\s+/gm, "")
+    .replace(/^整理后[:：]\s*/gm, "")
+    .trim();
+}
+
+function canUseRuleParsedOrders(items) {
+  return items.length > 0 && items.every((order) => Number(order.amount || 0) > 0 && order.targets?.length);
+}
+
+async function aiParseOrders() {
+  if (location.protocol === "file:") {
+    setOcrStatus("请用本地AI版地址打开，file页面会被 Ollama 拦截");
+    return;
+  }
+  const input = $("orderInput");
+  const raw = input.value.trim();
+  if (!raw) {
+    setOcrStatus("请先输入要解析的内容");
+    return;
+  }
+  const context = parseInputContext(raw);
+  applyParseContextToControls(context);
+  const ruleParsed = parseInputText(context.text, context.region, $("defaultType")?.value || "特码")
+    .flatMap(expandZodiacComboOrder)
+    .flatMap(expandMainZodiacSingles)
+    .map((order) => applyCustomerDefaults(order, context.customer));
+  if (canUseRuleParsedOrders(ruleParsed)) {
+    parsed = ruleParsed;
+    renderParsed();
+    renderDeferred();
+    setOcrStatus("规则已解析，请核对后入库");
+    return;
+  }
+  const prompt = aiNormalizePrompt(raw);
+  setOcrStatus("AI正在整理...");
+  let lastError;
+  for (const baseUrl of localAiCandidates()) {
+    try {
+      if (!isAllowedLocalAiUrl(baseUrl)) throw new Error("local-ai-url-only");
+      const text = await callOllama(baseUrl, prompt);
+      const cleaned = cleanAiOrderText(text);
+      if (!cleaned) throw new Error("empty-ai-result");
+      input.value = cleaned;
+      resizeOrderInput();
+      parseOrders();
+      setOcrStatus(`AI已整理，请核对后入库`);
+      return;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  console.warn(lastError);
+  setOcrStatus("AI解析失败，仅允许连接本机 Ollama");
 }
 
 function loadScript(src) {
@@ -1930,7 +2247,6 @@ function isWinner(order, drawNums) {
   if (order.type === "特串") return [...targets].some((target) => firstSixSet.has(target)) && targets.has(pad(special));
   if (order.type === "波色") return order.targets.includes(specialMeta.color);
   if (order.type === "半波") return order.targets.some((t) => specialMeta.color[0] === t[0] && (t.includes(specialMeta.size) || t.includes(specialMeta.oddEven)));
-  if (order.type === "两面") return order.targets.includes(specialMeta.size) || order.targets.includes(specialMeta.oddEven);
   return false;
 }
 
@@ -2007,14 +2323,13 @@ function exposureForNumber(region, n, limit = 0) {
   const customerRebate = 0;
   const stake = grossStake;
   const adjust = Number(adjustments[region]?.[pad(n)] || 0);
-  const adjustOdds = Number($("adjustOdds").value || 47);
-  const total = direct + adjust;
-  const autoReport = limit > 0 ? Math.max(0, total - limit) : 0;
-  const manualReport = adjust;
-  const reportAmount = Math.max(autoReport, manualReport);
-  const reportReturn = reportAmount * adjustOdds;
-  const profit = stake - payout + reportReturn;
-  return { n, meta, stake, grossStake, customerRebate, payout, direct, sources, adjust, total, autoReport, reportAmount, profit, excess: 0 };
+  const storedReported = Number(reported[region]?.[pad(n)] || reported[region]?.[meta.label] || 0);
+  const total = direct;
+  const manualReport = Math.min(total, Math.max(0, adjust + storedReported));
+  const balance = Math.max(0, total - manualReport);
+  const autoReport = limit > 0 ? Math.max(0, balance - limit) : 0;
+  const reportAmount = manualReport;
+  return { n, meta, stake, grossStake, customerRebate, payout, direct, sources, adjust, total, balance, autoReport, reportAmount, profit: 0, excess: 0 };
 }
 
 function sourceSummary(row) {
@@ -2052,9 +2367,11 @@ function markReportSubmitted() {
   const region = $("riskRegion").value;
   const limit = Number($("riskLimit").value || 0);
   reported[region] = reported[region] || {};
-  Array.from({ length: 49 }, (_, i) => exposureForNumber(region, i + 1, limit)).forEach((row) => {
-    const excess = Math.max(0, row.total - limit);
-    if (excess > 0) reported[region][row.meta.label] = excess;
+  riskRowsAtLimit(region, limit).forEach((row) => {
+    const pending = Number(row.pendingReport || 0);
+    if (pending > 0) {
+      reported[region][row.meta.label] = Number(reported[region][row.meta.label] || 0) + pending;
+    }
   });
   saveAll();
   renderRisk();
@@ -2064,40 +2381,42 @@ function markReportSubmitted() {
 function clearReportedList() {
   const region = $("riskRegion").value;
   reported[region] = {};
+  adjustments[region] = {};
   saveAll();
   renderRisk();
   $("riskSummary").textContent = "已清空已上报记录";
 }
 
+function riskSnapshot(region, limit) {
+  const rows = Array.from({ length: 49 }, (_, i) => {
+    const row = exposureForNumber(region, i + 1, limit);
+    row.rawBalance = Number(row.balance || 0);
+    row.pendingReport = limit > 0 ? Math.max(0, row.rawBalance - limit) : 0;
+    row.balance = Math.max(0, row.rawBalance - row.pendingReport);
+    row.excess = row.pendingReport;
+    row.reported = row.reportAmount;
+    return row;
+  });
+  const balanceTotal = rows.reduce((sum, row) => sum + Number(row.balance || 0), 0);
+  const reportTotal = rows.reduce((sum, row) => sum + Number(row.reportAmount || 0) + Number(row.pendingReport || 0), 0);
+  const adjustOdds = Number($("adjustOdds").value || 47);
+  rows.forEach((row) => {
+    row.payoutAfterReport = Number(row.balance || 0) * adjustOdds;
+    row.profit = balanceTotal - row.payoutAfterReport;
+  });
+  return { rows, balanceTotal, reportTotal, adjustOdds };
+}
+
 function riskRowsAtLimit(region, limit) {
-  return Array.from({ length: 49 }, (_, i) => exposureForNumber(region, i + 1, limit));
+  return riskSnapshot(region, limit).rows;
 }
 
 function maxSafeRiskLimit(region) {
-  const baseRows = riskRowsAtLimit(region, 1);
-  const maxTotal = Math.ceil(Math.max(...baseRows.map((row) => Number(row.total || 0)), 0));
-  if (!maxTotal) return { limit: 0, minProfit: 0 };
-  const safeAt = (limit) => {
-    const rows = riskRowsAtLimit(region, limit);
-    return Math.min(...rows.map((row) => row.profit));
-  };
-  if (safeAt(1) < 0) return { limit: 1, minProfit: safeAt(1), unsafe: true };
-  let low = 1;
-  let high = maxTotal;
-  let best = 1;
-  let bestProfit = safeAt(1);
-  while (low <= high) {
-    const mid = Math.floor((low + high) / 2);
-    const minProfit = safeAt(mid);
-    if (minProfit >= 0) {
-      best = mid;
-      bestProfit = minProfit;
-      low = mid + 1;
-    } else {
-      high = mid - 1;
-    }
-  }
-  return { limit: best, minProfit: bestProfit };
+  const snapshot = riskSnapshot(region, 0);
+  const maxBalance = Math.max(...snapshot.rows.map((row) => Number(row.balance || 0)), 0);
+  if (!snapshot.balanceTotal || !snapshot.adjustOdds || !maxBalance) return { limit: 0, minProfit: 0 };
+  const limit = Math.max(0, Math.min(maxBalance, Math.floor(snapshot.balanceTotal / snapshot.adjustOdds)));
+  return { limit, minProfit: snapshot.balanceTotal - (limit * snapshot.adjustOdds) };
 }
 
 function applySmartRiskLimit() {
@@ -2119,13 +2438,11 @@ function renderRisk() {
   const region = $("riskRegion").value;
   const limit = Number($("riskLimit").value || 0);
   setRiskLimitForRegion(region, limit);
-  const rows = Array.from({ length: 49 }, (_, i) => {
-    const row = exposureForNumber(region, i + 1, limit);
-    row.excess = Math.max(0, row.total - limit);
-    row.reported = Number(reported[region]?.[row.meta.label] || 0);
-    row.pendingReport = Math.max(0, row.excess - row.reported);
-    return row;
-  }).sort((a, b) => b.pendingReport - a.pendingReport || b.excess - a.excess || b.total - a.total || a.profit - b.profit || a.n - b.n);
+  const snapshot = riskSnapshot(region, limit);
+  const rows = snapshot.rows;
+  const balanceTotal = snapshot.balanceTotal;
+  const reportTotal = snapshot.reportTotal;
+  rows.sort((a, b) => b.pendingReport - a.pendingReport || b.excess - a.excess || b.balance - a.balance || a.profit - b.profit || a.n - b.n);
   const profits = rows.map((r) => r.profit);
   const specialOrderTotal = orders
     .filter((order) => order.region === region && order.type === "特码")
@@ -2134,7 +2451,8 @@ function renderRisk() {
   const riskDiff = riskDirectTotal - specialOrderTotal;
   $("maxProfit").textContent = money(Math.max(...profits, 0));
   $("maxLoss").textContent = money(Math.min(...profits, 0));
-  $("specialRiskCheck").textContent = `${money(specialOrderTotal)} / ${money(riskDirectTotal)}${riskDiff ? ` 差${money(riskDiff)}` : ""}`;
+  $("specialRiskCheck").textContent = `${money(specialOrderTotal)} - ${money(reportTotal)} = ${money(balanceTotal)}${riskDiff ? ` 差${money(riskDiff)}` : ""}`;
+  $("reportTotal").textContent = money(reportTotal);
   const smartLimit = maxSafeRiskLimit(region);
   $("smartRiskLimitText").textContent = smartLimit.unsafe
     ? `推荐 ${money(smartLimit.limit)}，仍亏 ${money(smartLimit.minProfit)}`
@@ -2149,7 +2467,7 @@ function renderRisk() {
       <td>${money(r.direct)}</td>
       <td class="source-cell">${r.sources?.length ? `<details><summary>${htmlEscape(sourceSummary(r))}</summary>${sourceDetails(r)}</details>` : "-"}</td>
       <td><input data-adjust="${r.meta.label}" type="number" min="0" step="1" value="${money(r.adjust)}" /></td>
-      <td>${money(r.total)}</td>
+      <td>${money(r.balance)}</td>
       <td class="${r.excess > 0 ? "bad" : "ok"}">${money(r.excess)}</td>
       <td class="${r.profit >= 0 ? "ok" : "bad"}">${money(r.profit)}</td>
     </tr>
@@ -2157,7 +2475,7 @@ function renderRisk() {
   $("reportRows").innerHTML = reportRows.length ? reportRows.map((r) => `
     <tr>
       <td>${r.meta.label}</td>
-      <td>${money(r.total)}</td>
+      <td>${money(r.balance)}</td>
       <td>${money(r.reported)}</td>
       <td class="bad">${money(r.pendingReport)}</td>
     </tr>
@@ -2366,6 +2684,14 @@ function closeMobilePanels() {
   });
 }
 
+function playDrawBlessingOnce() {
+  const video = $("drawBlessingVideo");
+  if (!video) return;
+  video.muted = true;
+  video.currentTime = 0;
+  video.play().catch(() => {});
+}
+
 function openMobilePanel(name) {
   closeMobilePanels();
   let target = null;
@@ -2388,10 +2714,12 @@ function openMobilePanel(name) {
   if (!target) return;
   document.body.classList.add("mobile-panel-active");
   target.classList.add("mobile-panel-open");
+  if (name === "draw") playDrawBlessingOnce();
 }
 
 window.FortuneApp = {
   parseOrders,
+  aiParseOrders,
   recognizeImageOrders,
   addCustomer,
   saveCustomerSettings,
@@ -2409,9 +2737,7 @@ window.FortuneApp = {
   closeCustomerDialog,
   openEntryTools,
   openMobilePanel,
-  closeMobilePanels,
-  buildLicenseKey,
-  deviceCode
+  closeMobilePanels
 };
 
 function bindControls() {
@@ -2420,6 +2746,7 @@ function bindControls() {
   setClick("saveCustomerSettingsBtn", saveCustomerSettings);
   setClick("saveParsedBtn", saveParsed);
   setClick("clearInputBtn", clearInput);
+  setClick("aiParseBtn", aiParseOrders);
   setClick("fetchLatestDrawBtn", fetchLatestDraw);
   setClick("settleBtn", settleOrders);
   setClick("clearSettlementBtn", clearSettlement);
@@ -2431,8 +2758,7 @@ function bindControls() {
   on("defaultType", "change", parseOrders);
   on("entryCustomer", "change", parseOrders);
   on("settingsCustomer", "change", renderCustomerSettings);
-  on("imageOcrInput", "change", (event) => recognizeImageOrders(event.target.files?.[0]));
-  document.querySelectorAll("[data-mobile-panel]").forEach((button) => {
+    document.querySelectorAll("[data-mobile-panel]").forEach((button) => {
     button.addEventListener("click", () => {
       const panel = button.dataset.mobilePanel;
       if (panel === "close") closeMobilePanels();
@@ -2456,14 +2782,31 @@ function clearInput() {
   renderParsed();
   renderDeferred();
 }
+
+function bindDrawBlessingVideo() {
+  const video = $("drawBlessingVideo");
+  if (!video) return;
+  playDrawBlessingOnce();
+  video.addEventListener("ended", () => {
+    video.pause();
+  });
+}
 populateDefaultTypeSelect();
 bindControls();
+bindDrawBlessingVideo();
 on("riskRegion", "change", changeRiskRegion);
 on("adjustOdds", "input", renderRisk);
 on("adjustRebate", "input", renderRisk);
 on("smartRiskLimitBtn", "click", applySmartRiskLimit);
 on("riskLimit", "input", updateRiskLimitFromInput);
 on("orderSearch", "input", renderOrders);
+
+const customerCleanup = sanitizeCustomers(customers);
+if (customerCleanup.changed) {
+  customers = customerCleanup.items;
+  safeStorageSet(CUSTOMER_KEY, JSON.stringify(customers));
+  saveDataBackup();
+}
 
 if ($("riskLimit") && $("riskRegion")) $("riskLimit").value = money(riskLimitForRegion($("riskRegion").value));
 on("orderInput", "input", resizeOrderInput);

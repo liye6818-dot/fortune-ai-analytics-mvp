@@ -16,9 +16,9 @@ import {
   hashStandaloneKey,
   hashSessionToken,
   isExpired,
-  legacyLicenseExpiry,
   makeId,
   nowIso,
+  randomAccessCode,
   randomToken,
   verifyPassword
 } from "./security.js";
@@ -29,6 +29,7 @@ const app = express();
 const server = createServer(app);
 const projectSockets = new Map();
 const loginAttempts = new Map();
+const ONLINE_WINDOW_MS = 45000;
 
 app.disable("x-powered-by");
 app.use(helmet({
@@ -43,6 +44,17 @@ app.use(helmet({
   }
 }));
 app.use(express.json({ limit: "1mb" }));
+app.use((req, res, next) => {
+  const origin = req.get("origin");
+  if (!origin || origin === "null" || /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin) || origin === config.appBaseUrl) {
+    res.setHeader("Access-Control-Allow-Origin", origin || "*");
+    res.setHeader("Vary", "Origin");
+  }
+  res.setHeader("Access-Control-Allow-Headers", "content-type, authorization, x-csrf-token");
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,PATCH,DELETE,OPTIONS");
+  if (req.method === "OPTIONS") return res.sendStatus(204);
+  next();
+});
 app.use("/admin", express.static(path.resolve(__dirname, "..", "public", "admin")));
 
 function rateLimit(key, limit = 10, windowMs = 60000) {
@@ -72,6 +84,7 @@ function publicSecurityCode(row) {
     lastLoginAt: row.last_login_at,
     lastLoginIp: row.last_login_ip,
     online: Boolean(row.online),
+    onlineCount: row.online_count ?? 0,
     deletedAt: row.deleted_at
   };
 }
@@ -305,84 +318,42 @@ app.get("/api/admin/standalone-keys", requireAdmin(db), (req, res) => {
 });
 
 app.post("/api/admin/standalone-keys", requireAdmin(db), (req, res) => {
-  const { key, note = "", duration = "365", customExpiresAt = null } = req.body || {};
-  if (!key) return res.status(400).json({ error: "key_required" });
+  const { note = "", duration = "365", customExpiresAt = null } = req.body || {};
   const expiry = expiryFromDuration(duration, customExpiresAt);
   const ts = nowIso();
-  const row = {
-    id: makeId("stk"),
-    key_hash: hashStandaloneKey(key),
-    key_preview: codePreview(key),
-    note,
-    status: "active",
-    expires_at: expiry.expiresAt,
-    permanent: expiry.permanent,
-    created_by: req.admin.id,
-    created_at: ts,
-    updated_at: ts
-  };
-  try {
-    db.prepare(`
-      INSERT INTO standalone_keys (
-        id, key_hash, key_preview, note, status, expires_at, permanent,
-        created_by, created_at, updated_at
-      ) VALUES (
-        @id, @key_hash, @key_preview, @note, @status, @expires_at, @permanent,
-        @created_by, @created_at, @updated_at
-      )
-    `).run(row);
-  } catch (error) {
-    if (String(error.message || "").includes("UNIQUE")) {
-      return res.status(409).json({ error: "standalone_key_exists" });
+  let key = "";
+  let row = null;
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    key = randomAccessCode("CJY-DJ-");
+    row = {
+      id: makeId("stk"),
+      key_hash: hashStandaloneKey(key),
+      key_preview: codePreview(key),
+      note,
+      status: "active",
+      expires_at: expiry.expiresAt,
+      permanent: expiry.permanent,
+      created_by: req.admin.id,
+      created_at: ts,
+      updated_at: ts
+    };
+    try {
+      db.prepare(`
+        INSERT INTO standalone_keys (
+          id, key_hash, key_preview, note, status, expires_at, permanent,
+          created_by, created_at, updated_at
+        ) VALUES (
+          @id, @key_hash, @key_preview, @note, @status, @expires_at, @permanent,
+          @created_by, @created_at, @updated_at
+        )
+      `).run(row);
+      break;
+    } catch (error) {
+      if (!String(error.message || "").includes("UNIQUE") || attempt === 4) throw error;
     }
-    throw error;
   }
   writeAuditLog(db, { actorType: "admin", actorId: req.admin.id, action: "create", entityType: "standalone_key", entityId: row.id, ipAddress: req.ip, userAgent: req.get("user-agent") });
-  res.status(201).json({ item: publicStandaloneKey(row) });
-});
-
-app.post("/api/admin/standalone-keys/import-legacy", requireAdmin(db), (req, res) => {
-  const { key, note = "", deviceId = "" } = req.body || {};
-  const normalizedKey = String(key || "").trim().toUpperCase();
-  const expiresAt = legacyLicenseExpiry(normalizedKey);
-  if (!expiresAt) return res.status(400).json({ error: "invalid_legacy_license" });
-  const ts = nowIso();
-  const row = {
-    id: makeId("stk"),
-    key_hash: hashStandaloneKey(normalizedKey),
-    key_preview: codePreview(normalizedKey),
-    note: note || "旧版激活码导入",
-    status: "active",
-    expires_at: expiresAt,
-    permanent: 0,
-    bound_device_id: String(deviceId || "").trim().toUpperCase() || null,
-    bound_at: deviceId ? ts : null,
-    bound_ip: null,
-    bound_user_agent: null,
-    created_by: req.admin.id,
-    created_at: ts,
-    updated_at: ts
-  };
-  try {
-    db.prepare(`
-      INSERT INTO standalone_keys (
-        id, key_hash, key_preview, note, status, expires_at, permanent,
-        bound_device_id, bound_at, bound_ip, bound_user_agent,
-        created_by, created_at, updated_at
-      ) VALUES (
-        @id, @key_hash, @key_preview, @note, @status, @expires_at, @permanent,
-        @bound_device_id, @bound_at, @bound_ip, @bound_user_agent,
-        @created_by, @created_at, @updated_at
-      )
-    `).run(row);
-  } catch (error) {
-    if (String(error.message || "").includes("UNIQUE")) {
-      return res.status(409).json({ error: "standalone_key_exists" });
-    }
-    throw error;
-  }
-  writeAuditLog(db, { actorType: "admin", actorId: req.admin.id, action: "import_legacy", entityType: "standalone_key", entityId: row.id, ipAddress: req.ip, userAgent: req.get("user-agent") });
-  res.status(201).json({ item: publicStandaloneKey(row) });
+  res.status(201).json({ key, item: publicStandaloneKey(row) });
 });
 
 app.patch("/api/admin/standalone-keys/:id", requireAdmin(db), (req, res) => {
@@ -439,45 +410,91 @@ app.delete("/api/admin/standalone-keys/:id", requireAdmin(db), (req, res) => {
 
 app.get("/api/admin/security-codes", requireAdmin(db), (req, res) => {
   const q = `%${String(req.query.q || "").trim()}%`;
+  const now = nowIso();
+  const onlineSince = new Date(Date.now() - ONLINE_WINDOW_MS).toISOString();
   const rows = db.prepare(`
-    SELECT * FROM security_codes
-    WHERE (? = '%%' OR customer_name LIKE ? OR contact LIKE ? OR remark LIKE ? OR code_preview LIKE ?)
-    ORDER BY created_at DESC
+    SELECT sc.*,
+      (SELECT COUNT(*) FROM sessions s WHERE s.security_code_id = sc.id AND s.revoked_at IS NULL AND s.expires_at > ? AND s.last_seen_at >= ?) AS online_count
+    FROM security_codes sc
+    WHERE (? = '%%' OR sc.customer_name LIKE ? OR sc.contact LIKE ? OR sc.remark LIKE ? OR sc.code_preview LIKE ?)
+    ORDER BY sc.created_at DESC
     LIMIT 200
-  `).all(q, q, q, q, q);
+  `).all(now, onlineSince, q, q, q, q, q);
   res.json({ items: rows.map(publicSecurityCode) });
 });
 
 app.post("/api/admin/security-codes", requireAdmin(db), (req, res) => {
-  const { code, customerName, contact = "", remark = "", duration = "365", customExpiresAt = null } = req.body || {};
-  if (!code || !customerName) return res.status(400).json({ error: "code_and_customer_required" });
+  const { customerName, contact = "", remark = "", duration = "365", customExpiresAt = null } = req.body || {};
+  if (!customerName) return res.status(400).json({ error: "customer_required" });
   const expiry = expiryFromDuration(duration, customExpiresAt);
   const ts = nowIso();
-  const row = {
-    id: makeId("sec"),
-    code_hash: hashSecurityCode(code),
-    code_preview: codePreview(code),
-    customer_name: customerName,
-    contact,
-    remark,
-    created_at: ts,
-    expires_at: expiry.expiresAt,
-    permanent: expiry.permanent,
-    enabled: 1,
-    created_by: req.admin.id,
-    updated_at: ts
-  };
-  db.prepare(`
-    INSERT INTO security_codes (
-      id, code_hash, code_preview, customer_name, contact, remark, created_at,
-      expires_at, permanent, enabled, created_by, updated_at
-    ) VALUES (
-      @id, @code_hash, @code_preview, @customer_name, @contact, @remark, @created_at,
-      @expires_at, @permanent, @enabled, @created_by, @updated_at
-    )
-  `).run(row);
+  let code = "";
+  let row = null;
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    code = randomAccessCode("CJY-LJ-");
+    row = {
+      id: makeId("sec"),
+      code_hash: hashSecurityCode(code),
+      code_preview: codePreview(code),
+      customer_name: customerName,
+      contact,
+      remark,
+      created_at: ts,
+      expires_at: expiry.expiresAt,
+      permanent: expiry.permanent,
+      enabled: 1,
+      created_by: req.admin.id,
+      updated_at: ts
+    };
+    try {
+      db.prepare(`
+        INSERT INTO security_codes (
+          id, code_hash, code_preview, customer_name, contact, remark, created_at,
+          expires_at, permanent, enabled, created_by, updated_at
+        ) VALUES (
+          @id, @code_hash, @code_preview, @customer_name, @contact, @remark, @created_at,
+          @expires_at, @permanent, @enabled, @created_by, @updated_at
+        )
+      `).run(row);
+      break;
+    } catch (error) {
+      if (!String(error.message || "").includes("UNIQUE") || attempt === 4) throw error;
+    }
+  }
   writeAuditLog(db, { actorType: "admin", actorId: req.admin.id, action: "create", entityType: "security_code", entityId: row.id, ipAddress: req.ip, userAgent: req.get("user-agent") });
-  res.status(201).json({ item: publicSecurityCode(row) });
+  res.status(201).json({ code, item: publicSecurityCode({ ...row, online_count: 0 }) });
+});
+
+app.post("/api/admin/security-codes/:id/kick", requireAdmin(db), (req, res) => {
+  const current = db.prepare("SELECT * FROM security_codes WHERE id = ? AND deleted_at IS NULL").get(req.params.id);
+  if (!current) return res.status(404).json({ error: "security_code_not_found" });
+  const ts = nowIso();
+  const activeProjects = db.prepare(`
+    SELECT DISTINCT project_id AS projectId
+    FROM sessions
+    WHERE security_code_id = ? AND revoked_at IS NULL AND project_id IS NOT NULL
+  `).all(current.id);
+  db.prepare("UPDATE sessions SET revoked_at = ? WHERE security_code_id = ? AND revoked_at IS NULL").run(ts, current.id);
+  db.prepare("UPDATE project_members SET online = 0, last_active_at = ? WHERE security_code_id = ?").run(ts, current.id);
+  db.prepare("UPDATE security_codes SET online = 0, updated_at = ? WHERE id = ?").run(ts, current.id);
+  activeProjects.forEach((project) => broadcast(project.projectId, { type: "session:revoked", securityCodeId: current.id }));
+  writeAuditLog(db, { actorType: "admin", actorId: req.admin.id, action: "kick", entityType: "security_code", entityId: current.id, ipAddress: req.ip, userAgent: req.get("user-agent") });
+  res.json({ ok: true });
+});
+
+app.post("/api/admin/security-codes/kick-all", requireAdmin(db), (req, res) => {
+  const ts = nowIso();
+  const activeProjects = db.prepare(`
+    SELECT DISTINCT project_id AS projectId
+    FROM sessions
+    WHERE security_code_id IS NOT NULL AND revoked_at IS NULL AND project_id IS NOT NULL
+  `).all();
+  const result = db.prepare("UPDATE sessions SET revoked_at = ? WHERE security_code_id IS NOT NULL AND revoked_at IS NULL").run(ts);
+  db.prepare("UPDATE project_members SET online = 0, last_active_at = ?").run(ts);
+  db.prepare("UPDATE security_codes SET online = 0, updated_at = ?").run(ts);
+  activeProjects.forEach((project) => broadcast(project.projectId, { type: "session:revoked" }));
+  writeAuditLog(db, { actorType: "admin", actorId: req.admin.id, action: "kick_all", entityType: "security_code", ipAddress: req.ip, userAgent: req.get("user-agent"), metadata: { count: result.changes || 0 } });
+  res.json({ ok: true, count: result.changes || 0 });
 });
 
 app.patch("/api/admin/security-codes/:id", requireAdmin(db), (req, res) => {
@@ -621,7 +638,6 @@ app.post("/api/auth/security-code", (req, res) => {
     writeAuditLog(db, { actorType: "client", action: "login_failed", entityType: "security_code", ipAddress: req.ip, userAgent: req.get("user-agent") });
     return res.status(401).json({ error: "invalid_security_code" });
   }
-  revokeActiveClientSessionsForSecurityCode(row.id, req);
   const session = createSession({ securityCodeId: row.id, mode: "client", deviceId, deviceInfo, ipAddress: req.ip });
   db.prepare(`
     UPDATE security_codes

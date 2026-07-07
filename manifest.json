@@ -1,8 +1,8 @@
 {
   "id": "/",
-  "name": "财神爷88",
-  "short_name": "财神爷88",
-  "description": "财神爷88录单工具",
+  "name": "财神爷",
+  "short_name": "财神爷",
+  "description": "财神爷录单工具",
   "start_url": "./index.html?source=pwa",
   "scope": "./",
   "display": "standalone",

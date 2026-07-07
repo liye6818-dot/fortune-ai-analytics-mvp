@@ -1,23 +1,16 @@
 (function () {
-  const PWA_VERSION = "20260703_pwa_1";
-
-  if (!("serviceWorker" in navigator)) return;
-
   window.addEventListener("load", async () => {
     try {
-      const registration = await navigator.serviceWorker.register(`./sw.js?v=${PWA_VERSION}`, {
-        scope: "./"
-      });
-      await registration.update();
+      if ("serviceWorker" in navigator) {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(registrations.map((registration) => registration.unregister()));
+      }
+      if ("caches" in window) {
+        const names = await caches.keys();
+        await Promise.all(names.map((name) => caches.delete(name)));
+      }
     } catch (error) {
-      console.warn("PWA registration failed", error);
+      console.warn("Cache cleanup failed", error);
     }
-  });
-
-  let refreshing = false;
-  navigator.serviceWorker.addEventListener("controllerchange", () => {
-    if (refreshing) return;
-    refreshing = true;
-    window.location.reload();
   });
 })();

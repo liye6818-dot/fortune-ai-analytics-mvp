@@ -1,4 +1,5 @@
 window.APP_CONFIG = {
+  API_BASE_URL: "",
   MACAU_DRAW_API: "https://api3.marksix6.net/lottery_api.php?type=newMacau",
   HONGKONG_DRAW_API: "https://api3.marksix6.net/lottery_api.php?type=hk",
   CORS_PROXY: "replace-with-cors-proxy-url-or-empty",

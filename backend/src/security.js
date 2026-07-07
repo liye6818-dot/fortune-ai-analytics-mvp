@@ -14,23 +14,29 @@ export function randomToken(bytes = 32) {
   return crypto.randomBytes(bytes).toString("base64url");
 }
 
+export function randomAccessCode(prefix) {
+  let body = "";
+  while (body.length < 12) {
+    body += crypto.randomBytes(9).toString("base64url").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  }
+  body = body.slice(0, 12);
+  return `${prefix}${body.slice(0, 4)}-${body.slice(4, 8)}-${body.slice(8, 12)}`;
+}
+
 export function sha256(value) {
   return crypto.createHash("sha256").update(String(value)).digest("hex");
 }
 
+function normalizeAccessCode(code) {
+  return String(code || "").trim().toUpperCase().replace(/\s+/g, "");
+}
+
 export function hashSecurityCode(code) {
-  return sha256(`${config.securityCodePepper}|${String(code || "").trim()}`);
+  return sha256(`${config.securityCodePepper}|${normalizeAccessCode(code)}`);
 }
 
 export function hashStandaloneKey(key) {
-  return sha256(`${config.securityCodePepper}|standalone|${String(key || "").trim()}`);
-}
-
-export function legacyLicenseExpiry(key) {
-  const match = String(key || "").trim().toUpperCase().match(/^FA-(\d{8})-[0-9A-F]{8}$/);
-  if (!match) return null;
-  const compact = match[1];
-  return new Date(`${compact.slice(0, 4)}-${compact.slice(4, 6)}-${compact.slice(6, 8)}T23:59:59.999Z`).toISOString();
+  return sha256(`${config.securityCodePepper}|standalone|${normalizeAccessCode(key)}`);
 }
 
 export function hashSessionToken(token) {

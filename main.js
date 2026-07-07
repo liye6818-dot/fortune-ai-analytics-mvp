@@ -5,7 +5,8 @@ const ORDER_STORAGE_KEY = "fortune_ai_analytics_mvp_orders";
 const ADJUST_STORAGE_KEY = "fortune_ai_analytics_mvp_adjustments";
 const REPORTED_STORAGE_KEY = "fortune_ai_analytics_mvp_reported";
 const LEGACY_LICENSE_SESSION_KEY = "fortune_ai_analytics_mvp_license";
-const LICENSE_SESSION_KEY = "fortune_ai_analytics_mvp_standalone_license_v2";
+const OLD_LICENSE_SESSION_KEY = "fortune_ai_analytics_mvp_standalone_license_v2";
+const LICENSE_SESSION_KEY = "fortune_ai_analytics_mvp_access_code_v3";
 const DEVICE_KEY = "fortune_ai_analytics_mvp_device";
 const DATA_BACKUP_KEY = "fortune_ai_analytics_mvp_backup";
 const APP_CONFIG = window.APP_CONFIG || {};
@@ -13,6 +14,17 @@ const MACAU_DRAW_API = APP_CONFIG.MACAU_DRAW_API || "";
 const HONGKONG_DRAW_API = APP_CONFIG.HONGKONG_DRAW_API || "";
 const CORS_PROXY = APP_CONFIG.CORS_PROXY || "";
 const TESSERACT_SCRIPT_URL = APP_CONFIG.TESSERACT_SCRIPT_URL || "";
+const LOCAL_AI_BASE_URL = APP_CONFIG.LOCAL_AI_BASE_URL || "";
+const LOCAL_AI_MODEL = APP_CONFIG.LOCAL_AI_MODEL || "";
+const API_BASE_URL = String(APP_CONFIG.API_BASE_URL || (location.protocol === "file:" ? "http://127.0.0.1:3000" : "")).replace(/\/+$/, "");
+
+function apiUrl(path) {
+  return `${API_BASE_URL}${path}`;
+}
+
+function normalizeAccessCode(code) {
+  return String(code || "").trim().toUpperCase().replace(/\s+/g, "");
+}
 
 const zodiacOrder = ["鼠", "牛", "虎", "兔", "龙", "蛇", "马", "羊", "猴", "鸡", "狗", "猪"];
 const currentYearZodiac = "马";
@@ -79,6 +91,8 @@ let adjustments = loadJson(ADJUST_STORAGE_KEY, {});
 let reported = loadJson(REPORTED_STORAGE_KEY, {});
 let riskSettings = normalizeRiskSettings(loadJson(RISK_SETTINGS_KEY, { limitByRegion: { 澳门: 0, 香港: 0 } }));
 let customers = loadJson(CUSTOMER_KEY, [{ id: "default", name: "散客", odds: 47, oddsByType: { ...defaultOdds }, rebateByType: {}, rebate: 0 }]);
+let accessSession = null;
+let heartbeatTimer = null;
 
 const $ = (id) => document.getElementById(id);
 
@@ -120,40 +134,8 @@ function deviceCode() {
   return code;
 }
 
-function licenseSignature(device, expiresAt) {
-  return simpleHash(`FORTUNE|${device}|${expiresAt}|PRIVATE-MVP-2026`);
-}
-
-function buildLicenseKey(device, days) {
-  const expiresAt = new Date(Date.now() + Number(days) * 86400000).toISOString().slice(0, 10).replace(/-/g, "");
-  return `FA-${expiresAt}-${licenseSignature(device, expiresAt)}`;
-}
-
-function parseLicenseKey(key) {
-  const match = String(key || "").trim().toUpperCase().match(/^FA-(\d{8})-([0-9A-F]{8})$/);
-  if (!match) return null;
-  return { expiresAt: match[1], signature: match[2] };
-}
-
-function licenseExpiryDate(compactDate) {
-  const year = Number(compactDate.slice(0, 4));
-  const month = Number(compactDate.slice(4, 6)) - 1;
-  const day = Number(compactDate.slice(6, 8));
-  return new Date(year, month, day, 23, 59, 59);
-}
-
-function validateLicense(key) {
-  const parsedKey = parseLicenseKey(key);
-  const device = deviceCode();
-  if (!parsedKey) return { ok: false, message: "激活码格式不正确" };
-  if (parsedKey.signature !== licenseSignature(device, parsedKey.expiresAt)) return { ok: false, message: "激活码和本设备不匹配" };
-  const expires = licenseExpiryDate(parsedKey.expiresAt);
-  if (Date.now() > expires.getTime()) return { ok: false, message: "激活码已到期" };
-  return { ok: true, expires };
-}
-
 async function validateStandaloneKey(key) {
-  const response = await fetch("/api/auth/standalone-key", {
+  const response = await fetch(apiUrl("/api/auth/standalone-key"), {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
@@ -165,13 +147,39 @@ async function validateStandaloneKey(key) {
   const body = await response.json().catch(() => ({}));
   if (!response.ok) {
     if (body.error === "standalone_key_bound_to_other_device") {
-      return { ok: false, message: "该密钥已绑定其他设备，请联系管理员重置。" };
+      return { ok: false, message: "访问码状态异常，请联系管理员处理。" };
     }
-    if (body.error === "standalone_key_disabled") return { ok: false, message: "该密钥已被禁用，请联系管理员。" };
-    if (body.error === "standalone_key_expired") return { ok: false, message: "该密钥已到期，请联系管理员续期。" };
-    return { ok: false, message: "单机密钥无效，请检查后重试。" };
+    if (body.error === "standalone_key_disabled") return { ok: false, message: "访问码已失效，请联系管理员处理。" };
+    if (body.error === "standalone_key_expired") return { ok: false, message: "访问码已失效，请联系管理员处理。" };
+    return { ok: false, message: "访问码无效，请检查后重试。" };
   }
   return { ok: true, expires: body.item?.expiresAt ? new Date(body.item.expiresAt) : null };
+}
+
+async function validateSecurityCode(code) {
+  const response = await fetch(apiUrl("/api/auth/security-code"), {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      code,
+      deviceId: deviceCode(),
+      deviceInfo: navigator.userAgent
+    })
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) return { ok: false, message: "访问码无效，请检查后重试。" };
+  return {
+    ok: true,
+    expires: body.securityCode?.expiresAt ? new Date(body.securityCode.expiresAt) : null,
+    session: { token: body.token, csrfToken: body.csrfToken }
+  };
+}
+
+async function validateAccessCode(code) {
+  const standalone = await validateStandaloneKey(code);
+  if (standalone.ok) return standalone;
+  if (String(code || "").trim().toUpperCase().startsWith("CJY-DJ-")) return standalone;
+  return validateSecurityCode(code);
 }
 
 function setAppLocked(locked) {
@@ -179,69 +187,83 @@ function setAppLocked(locked) {
   $("licenseGate").hidden = !locked;
 }
 
-function unlockApp(key, expires) {
-  if ($("rememberLicense").checked) {
-    localStorage.setItem(LICENSE_SESSION_KEY, key);
-  } else {
-    sessionStorage.setItem(LICENSE_SESSION_KEY, key);
-  }
+function clearAccessCache() {
+  localStorage.removeItem(LEGACY_LICENSE_SESSION_KEY);
+  sessionStorage.removeItem(LEGACY_LICENSE_SESSION_KEY);
+  localStorage.removeItem(OLD_LICENSE_SESSION_KEY);
+  sessionStorage.removeItem(OLD_LICENSE_SESSION_KEY);
+  localStorage.removeItem(LICENSE_SESSION_KEY);
+  sessionStorage.removeItem(LICENSE_SESSION_KEY);
+}
+
+function lockFromServer() {
+  accessSession = null;
+  if (heartbeatTimer) clearInterval(heartbeatTimer);
+  heartbeatTimer = null;
+  clearAccessCache();
+  $("licenseMessage").textContent = "访问码已下线，请重新进入。";
+  setAppLocked(true);
+}
+
+async function sendHeartbeat() {
+  if (!accessSession?.token) return;
+  const response = await fetch(apiUrl("/api/session/heartbeat"), {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${accessSession.token}`,
+      "x-csrf-token": accessSession.csrfToken || ""
+    },
+    body: JSON.stringify({ deviceInfo: navigator.userAgent })
+  }).catch(() => null);
+  if (!response || !response.ok) lockFromServer();
+}
+
+function startHeartbeat(session) {
+  accessSession = session || null;
+  if (heartbeatTimer) clearInterval(heartbeatTimer);
+  heartbeatTimer = null;
+  if (!accessSession?.token) return;
+  sendHeartbeat();
+  heartbeatTimer = setInterval(sendHeartbeat, 30000);
+}
+
+function unlockApp(key, expires, session = null) {
+  clearAccessCache();
   setAppLocked(false);
-  $("lastSaved").textContent = expires ? `授权到期 ${expires.toLocaleDateString()}` : "单机密钥已授权";
+  $("lastSaved").textContent = expires ? `授权到期 ${expires.toLocaleDateString()}` : "已授权";
+  startHeartbeat(session);
 }
 
 async function activateLicense() {
-  const key = $("licenseInput").value.trim();
-  $("licenseMessage").textContent = "正在验证单机密钥...";
+  const key = normalizeAccessCode($("licenseInput").value);
+  $("licenseInput").value = key;
+  $("licenseMessage").textContent = "正在验证访问码...";
   let result;
   try {
-    result = await validateStandaloneKey(key);
+    result = await validateAccessCode(key);
   } catch {
     result = null;
   }
-  if (!result) result = { ok: false, message: "无法连接密钥服务器，请稍后重试。" };
+  if (!result) result = { ok: false, message: "无法连接访问服务，请稍后重试。" };
   if (!result.ok) {
     $("licenseMessage").textContent = result.message;
     return;
   }
-  unlockApp(key, result.expires);
+  unlockApp(key, result.expires, result.session);
 }
 
 function initLicenseGate() {
-  localStorage.removeItem(LEGACY_LICENSE_SESSION_KEY);
-  sessionStorage.removeItem(LEGACY_LICENSE_SESSION_KEY);
-  $("deviceCodeText").textContent = deviceCode();
-  $("copyDeviceBtn").addEventListener("click", async () => {
-    await navigator.clipboard?.writeText(deviceCode()).catch(() => {});
-    $("licenseMessage").textContent = "设备识别码已复制";
-  });
+  clearAccessCache();
+  const remember = $("rememberLicense");
+  if (remember) {
+    remember.checked = false;
+    remember.closest("label")?.setAttribute("hidden", "");
+  }
   $("activateBtn").addEventListener("click", activateLicense);
-  on("onlineModeBtn", "click", () => {
-    $("licenseMessage").textContent = "联机模式当前阶段已预留，暂未开放。请使用单机模式。";
-  });
   $("licenseInput").addEventListener("keydown", (event) => {
     if (event.key === "Enter") activateLicense();
   });
-  const savedKey = localStorage.getItem(LICENSE_SESSION_KEY) || sessionStorage.getItem(LICENSE_SESSION_KEY);
-  if (savedKey) {
-    $("licenseInput").value = savedKey;
-    $("licenseMessage").textContent = "正在验证单机密钥...";
-    validateStandaloneKey(savedKey).then((result) => {
-      if (result.ok) {
-        unlockApp(savedKey, result.expires);
-      } else {
-        localStorage.removeItem(LICENSE_SESSION_KEY);
-        sessionStorage.removeItem(LICENSE_SESSION_KEY);
-        $("licenseMessage").textContent = "旧版激活码已下线，请使用后台单机密钥重新登录。";
-        setAppLocked(true);
-      }
-    }).catch(() => {
-      localStorage.removeItem(LICENSE_SESSION_KEY);
-      sessionStorage.removeItem(LICENSE_SESSION_KEY);
-      $("licenseMessage").textContent = "无法连接密钥服务器，请稍后重试。";
-      setAppLocked(true);
-    });
-    return;
-  }
   setAppLocked(true);
 }
 
@@ -2715,9 +2737,7 @@ window.FortuneApp = {
   closeCustomerDialog,
   openEntryTools,
   openMobilePanel,
-  closeMobilePanels,
-  buildLicenseKey,
-  deviceCode
+  closeMobilePanels
 };
 
 function bindControls() {
