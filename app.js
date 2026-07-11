@@ -9,6 +9,7 @@ const OLD_LICENSE_SESSION_KEY = "fortune_ai_analytics_mvp_standalone_license_v2"
 const LICENSE_SESSION_KEY = "fortune_ai_analytics_mvp_access_code_v3";
 const DEVICE_KEY = "fortune_ai_analytics_mvp_device";
 const DATA_BACKUP_KEY = "fortune_ai_analytics_mvp_backup";
+const AI_EXAMPLES_KEY = "fortune_ai_analytics_mvp_ai_examples_v1";
 const APP_CONFIG = window.APP_CONFIG || {};
 const MACAU_DRAW_API = APP_CONFIG.MACAU_DRAW_API || "";
 const HONGKONG_DRAW_API = APP_CONFIG.HONGKONG_DRAW_API || "";
@@ -666,6 +667,7 @@ function saveAll() {
 
 function normalizeText(text) {
   return String(text || "")
+    .replace(/免/g, "兔")
     .replace(/两连/g, "二连")
     .replace(/[，、；;·]/g, " ")
     .replace(/[：:]/g, " ")
@@ -777,7 +779,7 @@ function numbersForTail(tail) {
 
 function numbersForHead(head) {
   const normalized = Number(head);
-  const start = normalized === 0 ? 1 : normalized * 10 + 1;
+  const start = normalized === 0 ? 1 : normalized * 10;
   const end = normalized === 0 ? 9 : Math.min(normalized * 10 + 9, 49);
   return Array.from({ length: Math.max(0, end - start + 1) }, (_, i) => pad(start + i));
 }
@@ -844,8 +846,8 @@ function detectAmount(line) {
   const unit = "\\s*[.。．、,，]?\\s*(?:元|米|块|斤)?";
   const amountSeparator = "[.。．、,，\\s]*[=＝/／?？]+[.。．、,，\\s]*";
   const patterns = [
-    new RegExp(`${amountSeparator}${amount}${unit}\\s*$`),
     new RegExp(`(?:${eachAmountKeywords})\\s*${amount}${unit}`),
+    new RegExp(`${amountSeparator}${amount}${unit}\\s*$`),
     new RegExp(`${amount}${unit}\\s*(?:[一二三四五六七八九十0-9]+段)?\\s*$`),
     new RegExp(`\\s${amount}$`)
   ];
@@ -862,16 +864,11 @@ function stripAmountText(line) {
   const amountSeparator = "[.。．、,，\\s]*[=＝/／?？]+[.。．、,，\\s]*";
   const text = String(line || "");
   const separatedAmountPattern = new RegExp(`${amountSeparator}${amount}${unit}\\s*$`, "g");
-  if (separatedAmountPattern.test(text)) {
-    return text
-      .replace(separatedAmountPattern, " ")
-      .replace(/\s+/g, " ")
-      .trim();
-  }
   const markedAmountPattern = new RegExp(`(?:${eachAmountKeywords})\\s*${amount}${unit}`, "g");
-  if (markedAmountPattern.test(text)) {
+  if (separatedAmountPattern.test(text) || markedAmountPattern.test(text)) {
     return text
       .replace(markedAmountPattern, " ")
+      .replace(separatedAmountPattern, " ")
       .replace(/\s+/g, " ")
       .trim();
   }
@@ -993,7 +990,7 @@ function makeOrder({ raw, region, type, targets, amount }) {
 }
 
 function isNumberOnlyLine(line) {
-  const withoutNumbers = String(line || "").replace(/\b[0-4]?\d\b/g, " ").replace(/[-\s]+/g, "").trim();
+  const withoutNumbers = String(line || "").replace(/\b[0-4]?\d\b/g, " ").replace(/[-\s/／+＋]+/g, "").trim();
   return extractNumbers(line).length > 0 && withoutNumbers === "";
 }
 
@@ -1028,25 +1025,28 @@ function splitMarkedSegments(line) {
 function splitEachAmountSegments(line) {
   const normalized = normalizeText(line);
   const amount = "([0-9]+(?:\\.[0-9]+)?|[一二两三四五六七八九十百]+)";
+  const trailingAmount = "(?:[0-9]+(?:\\.[0-9]+)?|[一二两三四五六七八九十百]+)";
   const unit = "\\s*[.。．、,，]?\\s*(?:元|米|块|斤)?";
   const pattern = new RegExp(`.*?(?:${eachAmountKeywords})\\s*${amount}${unit}`, "g");
   const segments = [];
   let match;
   let lastIndex = 0;
   while ((match = pattern.exec(normalized)) !== null) {
-    const segment = match[0].replace(/^[.。．·、,，\s]+/, "").trim();
+    const segment = match[0].replace(/^[.。．·、,，/／+＋\s]+/, "").trim();
     if (segment) segments.push(segment);
     lastIndex = pattern.lastIndex;
   }
-  const remainder = normalized.slice(lastIndex).replace(/^[.。．·、,，\s]+/, "").trim();
-  if (segments.length && remainder) segments.push(remainder);
+  const remainder = normalized.slice(lastIndex).replace(/^[.。．·、,，/／+＋\s]+/, "").trim();
+  const pureTotalPattern = new RegExp(`^[=＝]\\s*${trailingAmount}${unit}$`);
+  if (segments.length && remainder && !pureTotalPattern.test(remainder)) segments.push(remainder);
   return segments.length >= 2 ? segments : [normalized];
 }
 
 function deferredRemainder(line) {
   const amount = "([0-9]+(?:\\.[0-9]+)?|[一二两三四五六七八九十百]+)";
+  const trailingAmount = "(?:[0-9]+(?:\\.[0-9]+)?|[一二两三四五六七八九十百]+)";
   const unit = "\\s*[.。．、,，]?\\s*(?:元|米|块|斤)?";
-  const groupPattern = new RegExp(`((?:\\b[0-4]?\\d\\b[\\s.。．、,，-]*)+)\\s*(?:各数|每数|个数|各|每)\\s*${amount}${unit}`, "g");
+  const groupPattern = new RegExp(`((?:\\b[0-4]?\\d\\b[\\s.。．、,，\\-/／+＋]*)+)\\s*(?:各数|每数|个数|各|每)\\s*${amount}${unit}(?:\\s*[=＝]\\s*${trailingAmount}${unit})?`, "g");
   const remainder = normalizeText(line).replace(groupPattern, " ").replace(/\s+/g, " ").trim();
   return isDeferredLine(remainder) ? remainder : "";
 }
@@ -1056,8 +1056,9 @@ function parseInlineNumberGroups(line, fallbackRegion) {
   const region = detectRegion(normalized, fallbackRegion);
   const groups = [];
   const amount = "([0-9]+(?:\\.[0-9]+)?|[一二两三四五六七八九十百]+)";
+  const trailingAmount = "(?:[0-9]+(?:\\.[0-9]+)?|[一二两三四五六七八九十百]+)";
   const unit = "\\s*[.。．、,，]?\\s*(?:元|米|块|斤)?";
-  const groupPattern = new RegExp(`((?:\\b[0-4]?\\d\\b[\\s.。．、,，-]*)+)\\s*(?:各数|每数|个数|各|每)\\s*${amount}${unit}`, "g");
+  const groupPattern = new RegExp(`((?:\\b[0-4]?\\d\\b[\\s.。．、,，\\-/／+＋]*)+)\\s*(?:各数|每数|个数|各|每)\\s*${amount}${unit}(?:\\s*[=＝]\\s*${trailingAmount}${unit})?`, "g");
   let match;
   while ((match = groupPattern.exec(normalized)) !== null) {
     const targets = extractNumbers(match[1]);
@@ -1076,6 +1077,7 @@ function parseInlineNumberGroups(line, fallbackRegion) {
 
 function parseNumberSlashAmountGroups(line, fallbackRegion) {
   const normalized = normalizeText(line);
+  if (new RegExp(eachAmountKeywords).test(normalized)) return [];
   const region = detectRegion(normalized, fallbackRegion);
   const type = detectType(normalized);
   const amount = "([0-9]+(?:\\.[0-9]+)?|[一二两三四五六七八九十百]+)";
@@ -1094,7 +1096,30 @@ function parseNumberSlashAmountGroups(line, fallbackRegion) {
       amount: parsedAmount
     }));
   }
-  return groups.length >= 2 ? groups : [];
+  return groups;
+}
+
+function parseSpecialGroupAmountGroups(line, fallbackRegion) {
+  const normalized = normalizeText(line);
+  const region = detectRegion(normalized, fallbackRegion);
+  const amount = "([0-9]+(?:\\.[0-9]+)?|[一二两三四五六七八九十百]+)";
+  const label = "(特?大数|特?小数|特?大号|特?小号|特?大码|特?小码|大单|大双|小单|小双)";
+  const pattern = new RegExp(`${label}\\s*(?:[=＝/／?？]|各|每)?\\s*${amount}\\s*(?:元|米|块|斤)?`, "g");
+  const groups = [];
+  let match;
+  while ((match = pattern.exec(normalized)) !== null) {
+    const targets = specialNumberGroupTargets(match[1]);
+    const parsedAmount = chineseAmountToNumber(match[2]) || 0;
+    if (!targets.length || !parsedAmount) continue;
+    groups.push(makeOrder({
+      raw: match[0].trim(),
+      region,
+      type: "特码",
+      targets,
+      amount: parsedAmount
+    }));
+  }
+  return groups;
 }
 
 function parseCommaAmountStream(line, fallbackRegion) {
@@ -1130,7 +1155,7 @@ function isEditableDeferredLine(line) {
 }
 
 function hasPlayKeyword(line) {
-  return /连肖|[二三四五]连|[二三四五]连尾|[五六七八九十]不中|[5-9]不中|10不中|二中二|2\s*中\s*2|对碰|拖|三中三|3中3|特串|特肖|平肖|平特|平[鼠牛虎兔龙蛇马羊猴鸡狗猪]|一肖|主肖|平尾|半波|波色|红波|蓝波|绿波/.test(String(line || ""));
+  return /连肖|[二三四五]连|[二三四五]连尾|[五六七八九十]不中|[5-9]不中|10不中|二中二|2\s*中\s*2|对碰|拖|三中三|3中3|特串|特肖|平肖|平特|平[鼠牛虎兔龙蛇马羊猴鸡狗猪]|一肖|主肖|平尾|特?[0-4]\s*头|特?[0-9]\s*尾|特?[大小单双]|半波|波色|红波|蓝波|绿波/.test(String(line || ""));
 }
 
 function makeEditableDeferredOrder(line, fallbackRegion) {
@@ -1443,6 +1468,18 @@ function parseInputAsEditableSegments(lines, fallbackRegion) {
       continue;
     }
 
+    const specialGroupAmountGroups = parseSpecialGroupAmountGroups(line, fallbackRegion);
+    if (specialGroupAmountGroups.length) {
+      result.push(...specialGroupAmountGroups);
+      continue;
+    }
+
+    const numberSlashAmountGroups = parseNumberSlashAmountGroups(line, fallbackRegion);
+    if (numberSlashAmountGroups.length) {
+      result.push(...numberSlashAmountGroups);
+      continue;
+    }
+
     const commaAmountGroups = parseCommaAmountStream(line, fallbackRegion);
     if (commaAmountGroups.length) {
       result.push(...commaAmountGroups);
@@ -1553,6 +1590,13 @@ function parseInputText(text, fallbackRegion, fallbackType = "特码") {
     if (zodiacEqualsGroups.length) {
       pendingNumberLines = [];
       result.push(...zodiacEqualsGroups);
+      continue;
+    }
+
+    const specialGroupAmountGroups = parseSpecialGroupAmountGroups(line, fallbackRegion);
+    if (specialGroupAmountGroups.length) {
+      pendingNumberLines = [];
+      result.push(...specialGroupAmountGroups);
       continue;
     }
 
@@ -1702,17 +1746,30 @@ function isAllowedLocalAiUrl(baseUrl) {
 }
 
 function aiNormalizePrompt(text) {
+  const examples = loadAiExamples().slice(0, 8);
+  const exampleText = examples.length ? `\n请参考以下用户核对过的示例：\n${examples.map((item, index) => `示例${index + 1}原文：\n${item.raw}\n示例${index + 1}正确结果：\n${item.correct}`).join("\n\n")}\n` : "";
   return `把下面的六合彩下注内容整理成系统容易解析的纯文本。
 只输出整理后的订单行，不要解释，不要 Markdown，不要 JSON。
 保留区域、玩法、号码/生肖/尾数、金额。
+每笔不同金额必须单独一行；“05=515 29=505”要拆成“澳门 特码 05 各数 515”和“澳门 特码 29 各数 505”，禁止把金额拼接或合并。
+没有重复写区域或玩法时，沿用上一笔或界面默认值；玩法只能使用原文中的玩法或“特码”，不要输出“区域”等占位词。
 可用格式示例：
 澳门 特码 06 08 各数 50
 香港 特肖 鼠牛 各肖 20
 澳门 平尾 5尾 9尾 各 100
+${exampleText}
 
 原始内容：
 ${text}`;
 }
+
+function loadAiExamples() { try { const items=JSON.parse(safeStorageGet(AI_EXAMPLES_KEY)||"[]"); return Array.isArray(items)?items.filter((item)=>item?.raw&&item?.correct):[]; } catch { return []; } }
+function renderAiExamples() { const list=$("aiExamplesList"); if(!list)return; const items=loadAiExamples(); list.innerHTML=items.length?items.map((item,index)=>`<article class="ai-example-card"><div><b>原始乱单</b><pre>${htmlEscape(item.raw)}</pre></div><div><b>正确结果</b><pre>${htmlEscape(item.correct)}</pre></div><button class="plain danger-text" type="button" onclick="FortuneApp.deleteAiExample(${index})">删除</button></article>`).join(""):"<p>还没有示例。先保存一组乱单和正确结果。</p>"; }
+function openAiExamplesDialog() { const dialog=$("aiExamplesDialog"); if(!dialog)return; renderAiExamples(); if(typeof dialog.showModal==="function")dialog.showModal(); else { dialog.setAttribute("open",""); dialog.classList.add("fallback-open"); } }
+function closeAiExamplesDialog() { const dialog=$("aiExamplesDialog"); if(!dialog)return; if(typeof dialog.close==="function"&&dialog.open&&!dialog.classList.contains("fallback-open"))dialog.close(); else { dialog.classList.remove("fallback-open"); dialog.removeAttribute("open"); } }
+function useCurrentInputAsExample() { $("aiExampleRaw").value=$("orderInput").value.trim(); $("aiExampleStatus").textContent="已带入当前输入，请填写并核对正确结果"; }
+function saveAiExample() { const raw=$("aiExampleRaw").value.trim(); const correct=$("aiExampleCorrect").value.trim(); if(!raw||!correct){$("aiExampleStatus").textContent="原始乱单和正确结果都要填写";return;} const items=loadAiExamples(); items.unshift({raw,correct,savedAt:new Date().toISOString()}); safeStorageSet(AI_EXAMPLES_KEY,JSON.stringify(items.slice(0,50))); $("aiExampleRaw").value=""; $("aiExampleCorrect").value=""; $("aiExampleStatus").textContent=`已保存，共 ${Math.min(items.length,50)} 个示例`; renderAiExamples(); }
+function deleteAiExample(index) { const items=loadAiExamples(); items.splice(index,1); safeStorageSet(AI_EXAMPLES_KEY,JSON.stringify(items)); renderAiExamples(); }
 
 async function fetchWithTimeout(url, options = {}, timeoutMs = 45000) {
   const controller = new AbortController();
@@ -1753,10 +1810,6 @@ function cleanAiOrderText(text) {
     .trim();
 }
 
-function canUseRuleParsedOrders(items) {
-  return items.length > 0 && items.every((order) => Number(order.amount || 0) > 0 && order.targets?.length);
-}
-
 async function aiParseOrders() {
   if (location.protocol === "file:") {
     setOcrStatus("请用本地AI版地址打开，file页面会被 Ollama 拦截");
@@ -1770,17 +1823,6 @@ async function aiParseOrders() {
   }
   const context = parseInputContext(raw);
   applyParseContextToControls(context);
-  const ruleParsed = parseInputText(context.text, context.region, $("defaultType")?.value || "特码")
-    .flatMap(expandZodiacComboOrder)
-    .flatMap(expandMainZodiacSingles)
-    .map((order) => applyCustomerDefaults(order, context.customer));
-  if (canUseRuleParsedOrders(ruleParsed)) {
-    parsed = ruleParsed;
-    renderParsed();
-    renderDeferred();
-    setOcrStatus("规则已解析，请核对后入库");
-    return;
-  }
   const prompt = aiNormalizePrompt(raw);
   setOcrStatus("AI正在整理...");
   let lastError;
@@ -2346,6 +2388,15 @@ function reportLine(row) {
   return `${row.meta.label}=${money(row.pendingReport)}`;
 }
 
+function reportText(rows) {
+  const lines = rows.map(reportLine);
+  const chunks = [];
+  for (let i = 0; i < lines.length; i += 3) {
+    chunks.push(lines.slice(i, i + 3).join("    "));
+  }
+  return chunks.join("\n");
+}
+
 async function copyReportList() {
   const text = $("reportText").value.trim();
   if (!text) {
@@ -2459,7 +2510,7 @@ function renderRisk() {
     : `推荐 ${money(smartLimit.limit)}，最坏 ${money(smartLimit.minProfit)}`;
   const reportRows = rows.filter((r) => r.pendingReport > 0);
   $("riskSummary").textContent = `${region} 49 号码风险，待上报 ${reportRows.length} 个`;
-  $("reportText").value = reportRows.map(reportLine).join("\n");
+  $("reportText").value = reportText(reportRows);
   $("riskRows").innerHTML = rows.map((r) => `
     <tr class="${r.excess > 0 ? "risk-over" : ""}">
       <td>${r.meta.label}</td>
@@ -2478,8 +2529,9 @@ function renderRisk() {
       <td>${money(r.balance)}</td>
       <td>${money(r.reported)}</td>
       <td class="bad">${money(r.pendingReport)}</td>
+      <td class="source-cell">${r.sources?.length ? `<details><summary>${htmlEscape(sourceSummary(r))}</summary>${sourceDetails(r)}</details>` : "-"}</td>
     </tr>
-  `).join("") : `<tr><td colspan="4" class="muted-cell">没有新的待上报号码</td></tr>`;
+  `).join("") : `<tr><td colspan="5" class="muted-cell">没有新的待上报号码</td></tr>`;
   $("riskRows").querySelectorAll("input[data-adjust]").forEach((input) => {
     input.addEventListener("input", () => {
       adjustments[region] = adjustments[region] || {};
@@ -2502,7 +2554,7 @@ function renderCustomerSettlement() {
   const grouped = new Map();
   orders.forEach((order) => {
     const name = order.customerName || "散客";
-    if (!grouped.has(name)) grouped.set(name, { name, count: 0, total: 0, win: 0, rebate: 0, net: 0, winners: [] });
+    if (!grouped.has(name)) grouped.set(name, { name, count: 0, total: 0, win: 0, rebate: 0, net: 0, winners: [], orders: [] });
     const item = grouped.get(name);
     item.count += 1;
     item.total += Number(order.total || 0);
@@ -2510,16 +2562,27 @@ function renderCustomerSettlement() {
     item.rebate += Number(order.rebateAmount ?? rebateAmountFor(order.total, order.rebate));
     item.net += Number(order.profit || 0);
     if (Number(order.winAmount || 0) > 0) item.winners.push(order);
+    item.orders.push(order);
   });
   const rows = [...grouped.values()].sort((a, b) => a.net - b.net || b.total - a.total);
   $("customerSettlementRows").innerHTML = rows.length ? rows.map((item) => `
     <tr>
       <td class="settlement-customer-cell">
-        <details>
+        <details open>
           <summary>${htmlEscape(item.name)}</summary>
           <div class="settlement-detail">
             <div class="settlement-formula">
               金额 ${money(item.total)} - 返水 ${money(item.rebate)} - 中奖 ${money(item.win)} = ${money(item.total - item.rebate - item.win)}
+            </div>
+            <div class="settlement-orders">
+              ${item.orders.map((order) => `
+                <div class="settlement-order-row ${Number(order.winAmount || 0) > 0 ? "winner" : ""}">
+                  <b>${htmlEscape(order.region)} ${htmlEscape(order.type)} ${htmlEscape((order.targets || []).join(" "))}</b>
+                  <span>金额 ${money(order.amount)}，总额 ${money(order.total)}，赔率 ${money(order.odds)}</span>
+                  <small>状态 ${htmlEscape(order.status || "待开奖")}，中奖 ${money(order.winAmount || 0)}，返水 ${money(order.rebateAmount ?? rebateAmountFor(order.total, order.rebate))}，净 ${money(order.profit || 0)}</small>
+                  <small>${new Date(order.createdAt).toLocaleString()}</small>
+                </div>
+              `).join("")}
             </div>
             ${item.winners.length ? `
               <div class="settlement-winners">
@@ -2549,7 +2612,10 @@ function renderOrders() {
       <td>${htmlEscape(o.customerName || "散客")}</td>
       <td>${o.region}</td>
       <td>${o.type}</td>
-      <td data-mobile-meta="${htmlEscape(`${o.customerName || "散客"} · ${o.region || ""} · ${o.type || ""}`)}">${o.targets.join(" ")}</td>
+      <td class="order-content-cell" data-mobile-meta="${htmlEscape(`${o.region || ""} · ${o.type || ""}`)}">
+        <b>${htmlEscape(`${o.region || ""} ${o.type || ""}`.trim())}</b>
+        <span>${htmlEscape((o.targets || []).join(" "))}</span>
+      </td>
       <td>${money(o.amount)}</td>
       <td><input class="order-edit-number" data-order-id="${o.id}" data-field="odds" type="number" min="0" step="0.01" value="${money(o.odds)}" /></td>
       <td><input class="order-edit-number" data-order-id="${o.id}" data-field="rebate" type="number" min="0" step="0.01" value="${money(o.rebate)}" /></td>
@@ -2735,6 +2801,11 @@ window.FortuneApp = {
   exportData,
   openCustomerDialog,
   closeCustomerDialog,
+  openAiExamplesDialog,
+  closeAiExamplesDialog,
+  useCurrentInputAsExample,
+  saveAiExample,
+  deleteAiExample,
   openEntryTools,
   openMobilePanel,
   closeMobilePanels

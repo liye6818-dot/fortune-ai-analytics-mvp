@@ -448,6 +448,16 @@ select {
   width: 140px;
 }
 
+.ai-example-editor { display:grid; grid-template-columns:1fr 1fr; gap:12px; padding:16px; }
+.ai-example-editor label { display:grid; gap:6px; font-weight:700; }
+.ai-example-editor textarea { width:100%; resize:vertical; }
+.ai-example-actions { grid-column:1/-1; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+#aiExampleStatus { color:var(--muted); font-size:13px; }
+.ai-examples-list { display:grid; gap:10px; padding:0 16px 16px; }
+.ai-example-card { display:grid; grid-template-columns:1fr 1fr auto; gap:10px; padding:12px; border:1px solid var(--line); border-radius:8px; background:#fbfcfd; }
+.ai-example-card pre { margin:4px 0 0; white-space:pre-wrap; word-break:break-word; font:inherit; color:var(--muted); }
+@media (max-width:700px) { .ai-example-editor,.ai-example-card { grid-template-columns:1fr; } }
+
 .layout {
   display: grid;
   grid-template-columns: minmax(420px, 1.1fr) minmax(360px, 0.9fr);
@@ -1230,34 +1240,34 @@ label {
     font-weight: 700;
   }
 
-  .parsed-table td:nth-child(1)::before { content: "区域"; }
-  .parsed-table td:nth-child(2)::before { content: "玩法"; }
-  .parsed-table td:nth-child(3)::before { content: "内容"; }
-  .parsed-table td:nth-child(4)::before { content: "金额"; }
-  .parsed-table td:nth-child(5)::before { content: "赔率"; }
-  .parsed-table td:nth-child(6)::before { content: "总额"; }
-  .parsed-table td:nth-child(7)::before { content: "提示"; }
-  .parsed-table td:nth-child(8)::before { content: "操作"; }
+  .parsed-table td:nth-child(1)::before { content: "åºå"; }
+  .parsed-table td:nth-child(2)::before { content: "ç©æ³"; }
+  .parsed-table td:nth-child(3)::before { content: "åå®¹"; }
+  .parsed-table td:nth-child(4)::before { content: "éé¢"; }
+  .parsed-table td:nth-child(5)::before { content: "èµç"; }
+  .parsed-table td:nth-child(6)::before { content: "æ»é¢"; }
+  .parsed-table td:nth-child(7)::before { content: "æç¤º"; }
+  .parsed-table td:nth-child(8)::before { content: "æä½"; }
 
-  .settlement-table td:nth-child(1)::before { content: "客户"; }
-  .settlement-table td:nth-child(2)::before { content: "注单数"; }
-  .settlement-table td:nth-child(3)::before { content: "总金额"; }
-  .settlement-table td:nth-child(4)::before { content: "中奖"; }
-  .settlement-table td:nth-child(5)::before { content: "返水"; }
-  .settlement-table td:nth-child(6)::before { content: "净结算"; }
+  .settlement-table td:nth-child(1)::before { content: "å®¢æ·"; }
+  .settlement-table td:nth-child(2)::before { content: "æ³¨åæ°"; }
+  .settlement-table td:nth-child(3)::before { content: "æ»éé¢"; }
+  .settlement-table td:nth-child(4)::before { content: "ä¸­å¥"; }
+  .settlement-table td:nth-child(5)::before { content: "è¿æ°´"; }
+  .settlement-table td:nth-child(6)::before { content: "åç»ç®"; }
 
-  .orders-table td:nth-child(1)::before { content: "时间"; }
-  .orders-table td:nth-child(2)::before { content: "客户"; }
-  .orders-table td:nth-child(3)::before { content: "区域"; }
-  .orders-table td:nth-child(4)::before { content: "玩法"; }
-  .orders-table td:nth-child(5)::before { content: "内容"; }
-  .orders-table td:nth-child(6)::before { content: "金额"; }
-  .orders-table td:nth-child(7)::before { content: "赔率"; }
-  .orders-table td:nth-child(8)::before { content: "返水"; }
-  .orders-table td:nth-child(9)::before { content: "总额"; }
-  .orders-table td:nth-child(10)::before { content: "状态"; }
-  .orders-table td:nth-child(11)::before { content: "盈亏"; }
-  .orders-table td:nth-child(12)::before { content: "操作"; }
+  .orders-table td:nth-child(1)::before { content: "æ¶é´"; }
+  .orders-table td:nth-child(2)::before { content: "å®¢æ·"; }
+  .orders-table td:nth-child(3)::before { content: "åºå"; }
+  .orders-table td:nth-child(4)::before { content: "ç©æ³"; }
+  .orders-table td:nth-child(5)::before { content: "åå®¹"; }
+  .orders-table td:nth-child(6)::before { content: "éé¢"; }
+  .orders-table td:nth-child(7)::before { content: "èµç"; }
+  .orders-table td:nth-child(8)::before { content: "è¿æ°´"; }
+  .orders-table td:nth-child(9)::before { content: "æ»é¢"; }
+  .orders-table td:nth-child(10)::before { content: "ç¶æ"; }
+  .orders-table td:nth-child(11)::before { content: "çäº"; }
+  .orders-table td:nth-child(12)::before { content: "æä½"; }
 
   .parsed-table input,
   .parsed-table textarea,
@@ -1830,5 +1840,105 @@ label {
   .risk-workspace > .risk-table input {
     width: 58px;
     min-width: 0;
+  }
+}
+
+/* 20260709 report detail: three-column report text and compact details */
+#reportText {
+  width: 100%;
+  font-family: "Consolas", "Microsoft YaHei", monospace;
+  white-space: pre;
+}
+
+.report-table table {
+  min-width: 520px;
+}
+
+.report-table .source-cell {
+  max-width: 260px;
+}
+/* 20260709 CSS label encoding fix: ASCII-only unicode escapes */
+@media (max-width: 900px) {
+  .parsed-table td:nth-child(1)::before { content: "\533A\57DF" !important; }
+  .parsed-table td:nth-child(2)::before { content: "\73A9\6CD5" !important; }
+  .parsed-table td:nth-child(3)::before { content: "\5185\5BB9" !important; }
+  .parsed-table td:nth-child(4)::before { content: "\91D1\989D" !important; }
+  .parsed-table td:nth-child(5)::before { content: "\8D54\7387" !important; }
+  .parsed-table td:nth-child(6)::before { content: "\603B\989D" !important; }
+  .parsed-table td:nth-child(7)::before { content: "\63D0\793A" !important; }
+  .parsed-table td:nth-child(8)::before { content: "\64CD\4F5C" !important; }
+
+  .settlement-table td:nth-child(1)::before { content: "\5BA2\6237" !important; }
+  .settlement-table td:nth-child(2)::before { content: "\6CE8\5355\6570" !important; }
+  .settlement-table td:nth-child(3)::before { content: "\603B\91D1\989D" !important; }
+  .settlement-table td:nth-child(4)::before { content: "\4E2D\5956" !important; }
+  .settlement-table td:nth-child(5)::before { content: "\8FD4\6C34" !important; }
+  .settlement-table td:nth-child(6)::before { content: "\51C0\7ED3\7B97" !important; }
+
+  .orders-table td:nth-child(1)::before { content: "\65F6\95F4" !important; }
+  .orders-table td:nth-child(2)::before { content: "\5BA2\6237" !important; }
+  .orders-table td:nth-child(3)::before { content: "\533A\57DF" !important; }
+  .orders-table td:nth-child(4)::before { content: "\73A9\6CD5" !important; }
+  .orders-table td:nth-child(5)::before { content: "\5185\5BB9" !important; }
+  .orders-table td:nth-child(6)::before { content: "\91D1\989D" !important; }
+  .orders-table td:nth-child(7)::before { content: "\8D54\7387" !important; }
+  .orders-table td:nth-child(8)::before { content: "\8FD4\6C34" !important; }
+  .orders-table td:nth-child(9)::before { content: "\603B\989D" !important; }
+  .orders-table td:nth-child(10)::before { content: "\72B6\6001" !important; }
+  .orders-table td:nth-child(11)::before { content: "\76C8\4E8F" !important; }
+  .orders-table td:nth-child(12)::before { content: "\64CD\4F5C" !important; }
+}
+/* 20260709 order detail cleanup */
+.order-content-cell {
+  display: grid;
+  gap: 3px;
+}
+
+.order-content-cell b {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.15;
+}
+
+.order-content-cell span {
+  color: var(--ink);
+  font-weight: 800;
+  word-break: break-word;
+}
+
+@media (max-width: 900px) {
+  .orders-table thead {
+    display: table-header-group !important;
+  }
+
+  .orders-table tbody {
+    display: table-row-group !important;
+  }
+
+  .orders-table tr {
+    display: table-row !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    overflow: visible !important;
+  }
+
+  .orders-table td,
+  .orders-table th {
+    display: table-cell !important;
+    grid-template-columns: none !important;
+  }
+
+  .orders-table td::before {
+    content: none !important;
+    display: none !important;
+  }
+
+  .orders-table .order-content-cell::before {
+    content: none !important;
+    display: none !important;
+  }
+
+  .orders-table .order-content-cell {
+    padding-top: 3px !important;
   }
 }
