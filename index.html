@@ -154,8 +154,10 @@
       <div class="dialog-head"><div><h2>AI解析示例库</h2><p>保存乱单和正确结果，AI解析时会自动参考最近的示例</p></div><button class="plain" type="button" onclick="FortuneApp.closeAiExamplesDialog()">关闭</button></div>
       <div class="ai-example-editor">
         <label>原始乱单<textarea id="aiExampleRaw" rows="5" placeholder="粘贴尚未整理的复杂原单"></textarea></label>
-        <label>正确解析结果<textarea id="aiExampleCorrect" rows="5" placeholder="一笔一行，例如：澳门 特码 05 各数 515"></textarea></label>
-        <div class="ai-example-actions"><button type="button" onclick="FortuneApp.useCurrentInputAsExample()">带入当前输入</button><button type="button" onclick="FortuneApp.saveAiExample()">保存示例</button><span id="aiExampleStatus"></span></div>
+        <label>AI当前解析结果<textarea id="aiExampleCorrect" rows="5" placeholder="点“让AI先解析”，也可以直接修改结果"></textarea></label>
+        <div class="ai-example-actions"><button type="button" onclick="FortuneApp.useCurrentInputAsExample()">带入当前输入</button><button type="button" onclick="FortuneApp.previewAiExample()">让AI先解析</button><button type="button" onclick="FortuneApp.saveAiExample()">确认正确并记住</button><span id="aiExampleStatus"></span></div>
+        <label class="ai-correction-label">告诉AI哪里不对<textarea id="aiExampleCorrection" rows="3" placeholder="像聊天一样说，例如：41的金额是383，每个号码要分开，全部都是澳门特码"></textarea></label>
+        <div class="ai-example-actions"><button type="button" onclick="FortuneApp.reviseAiExample()">发送纠正</button></div>
       </div>
       <div id="aiExamplesList" class="ai-examples-list"></div>
     </dialog>
@@ -396,7 +398,7 @@
     </main>
 
     <script src="./config.js?v=20260709_order_type_clean"></script>
-    <script src="./app.js?v=20260712_ai_examples"></script>
+    <script src="./app.js?v=20260712_ai_teacher"></script>
     <script src="./pwa.js?v=20260709_order_type_clean"></script>
   </body>
 </html>

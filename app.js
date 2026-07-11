@@ -1768,6 +1768,9 @@ function renderAiExamples() { const list=$("aiExamplesList"); if(!list)return; c
 function openAiExamplesDialog() { const dialog=$("aiExamplesDialog"); if(!dialog)return; renderAiExamples(); if(typeof dialog.showModal==="function")dialog.showModal(); else { dialog.setAttribute("open",""); dialog.classList.add("fallback-open"); } }
 function closeAiExamplesDialog() { const dialog=$("aiExamplesDialog"); if(!dialog)return; if(typeof dialog.close==="function"&&dialog.open&&!dialog.classList.contains("fallback-open"))dialog.close(); else { dialog.classList.remove("fallback-open"); dialog.removeAttribute("open"); } }
 function useCurrentInputAsExample() { $("aiExampleRaw").value=$("orderInput").value.trim(); $("aiExampleStatus").textContent="已带入当前输入，请填写并核对正确结果"; }
+async function askLocalAi(prompt) { let lastError; for(const baseUrl of localAiCandidates()){try{if(!isAllowedLocalAiUrl(baseUrl))throw new Error("local-ai-url-only");return cleanAiOrderText(await callOllama(baseUrl,prompt));}catch(error){lastError=error;}} throw lastError||new Error("ai-unavailable"); }
+async function previewAiExample() { const raw=$("aiExampleRaw").value.trim(); if(!raw){$("aiExampleStatus").textContent="请先粘贴原始乱单";return;} $("aiExampleStatus").textContent="AI正在解析..."; try{$("aiExampleCorrect").value=await askLocalAi(aiNormalizePrompt(raw));$("aiExampleStatus").textContent="请核对；不对就直接在下面告诉AI";}catch{$("aiExampleStatus").textContent="本机AI未连接，请确认 Ollama 已启动";} }
+async function reviseAiExample() { const raw=$("aiExampleRaw").value.trim(),current=$("aiExampleCorrect").value.trim(),correction=$("aiExampleCorrection").value.trim(); if(!raw||!current||!correction){$("aiExampleStatus").textContent="需要原单、当前结果和纠正说明";return;} $("aiExampleStatus").textContent="AI正在按你的说法修改..."; const prompt=`你正在学习用户的六合彩录单习惯。只输出修改后的标准订单行，不要解释。\n原始乱单：\n${raw}\n\n当前解析结果：\n${current}\n\n用户纠正：\n${correction}`; try{$("aiExampleCorrect").value=await askLocalAi(prompt);$("aiExampleCorrection").value="";$("aiExampleStatus").textContent="已修改，请继续核对或确认正确并记住";}catch{$("aiExampleStatus").textContent="本机AI未连接，请确认 Ollama 已启动";} }
 function saveAiExample() { const raw=$("aiExampleRaw").value.trim(); const correct=$("aiExampleCorrect").value.trim(); if(!raw||!correct){$("aiExampleStatus").textContent="原始乱单和正确结果都要填写";return;} const items=loadAiExamples(); items.unshift({raw,correct,savedAt:new Date().toISOString()}); safeStorageSet(AI_EXAMPLES_KEY,JSON.stringify(items.slice(0,50))); $("aiExampleRaw").value=""; $("aiExampleCorrect").value=""; $("aiExampleStatus").textContent=`已保存，共 ${Math.min(items.length,50)} 个示例`; renderAiExamples(); }
 function deleteAiExample(index) { const items=loadAiExamples(); items.splice(index,1); safeStorageSet(AI_EXAMPLES_KEY,JSON.stringify(items)); renderAiExamples(); }
 
@@ -2804,6 +2807,8 @@ window.FortuneApp = {
   openAiExamplesDialog,
   closeAiExamplesDialog,
   useCurrentInputAsExample,
+  previewAiExample,
+  reviseAiExample,
   saveAiExample,
   deleteAiExample,
   openEntryTools,

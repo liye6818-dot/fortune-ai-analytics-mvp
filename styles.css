@@ -452,6 +452,7 @@ select {
 .ai-example-editor label { display:grid; gap:6px; font-weight:700; }
 .ai-example-editor textarea { width:100%; resize:vertical; }
 .ai-example-actions { grid-column:1/-1; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.ai-correction-label { grid-column:1/-1; }
 #aiExampleStatus { color:var(--muted); font-size:13px; }
 .ai-examples-list { display:grid; gap:10px; padding:0 16px 16px; }
 .ai-example-card { display:grid; grid-template-columns:1fr 1fr auto; gap:10px; padding:12px; border:1px solid var(--line); border-radius:8px; background:#fbfcfd; }
