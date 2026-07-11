@@ -65,6 +65,7 @@
       }
       button.secondary { background: #fff; color: var(--primary); }
       button.danger { border-color: var(--danger); background: var(--danger); }
+      button.warn { border-color: #a66a00; background: #b7791f; }
       table {
         width: 100%;
         border-collapse: collapse;
@@ -346,9 +347,9 @@
             <td>${fmt(item.lastLoginAt)}<br><span class="muted">${esc(item.lastLoginIp || "")}</span></td>
             <td>
               <div class="actions">
-                <button type="button" onclick="toggleStandaloneKey('${item.id}', ${!item.enabled})">${item.enabled ? "禁用" : "启用"}</button>
-                <button type="button" onclick="resetStandaloneDevice('${item.id}')">重置设备</button>
-                <button class="danger" type="button" onclick="deleteStandaloneKey('${item.id}')">删除</button>
+                <button type="button" data-standalone-action="toggle" data-id="${item.id}" data-enabled="${!item.enabled}">${item.enabled ? "禁用" : "启用"}</button>
+                <button type="button" data-standalone-action="reset" data-id="${item.id}">重置设备</button>
+                <button class="danger" type="button" data-standalone-action="delete" data-id="${item.id}">删除</button>
               </div>
             </td>
           </tr>
@@ -356,20 +357,54 @@
       }
 
       async function toggleStandaloneKey(id, enabled) {
-        await api(`/api/admin/standalone-keys/${id}`, { method: "PATCH", body: JSON.stringify({ enabled }) });
-        await loadStandaloneKeys();
+        $("standaloneStatus").textContent = enabled ? "启用中..." : "禁用中...";
+        try {
+          await api(`/api/admin/standalone-keys/${id}`, { method: "PATCH", body: JSON.stringify({ enabled }) });
+          $("standaloneStatus").textContent = enabled ? "已启用" : "已禁用，在线页面将在心跳后下线";
+          await loadStandaloneKeys();
+        } catch (error) {
+          $("standaloneStatus").textContent = "操作失败：" + error.message;
+        }
       }
 
       async function resetStandaloneDevice(id) {
         if (!confirm("确认重置设备绑定？重置后下一台设备可重新绑定。")) return;
-        await api(`/api/admin/standalone-keys/${id}/reset-device`, { method: "POST", body: JSON.stringify({}) });
-        await loadStandaloneKeys();
+        $("standaloneStatus").textContent = "重置中...";
+        try {
+          await api(`/api/admin/standalone-keys/${id}/reset-device`, { method: "POST", body: JSON.stringify({}) });
+          $("standaloneStatus").textContent = "已重置设备，旧设备将在心跳后下线";
+          await loadStandaloneKeys();
+        } catch (error) {
+          $("standaloneStatus").textContent = "重置失败：" + error.message;
+        }
       }
 
       async function deleteStandaloneKey(id) {
         if (!confirm("确认删除这个单机访问码？")) return;
-        await api(`/api/admin/standalone-keys/${id}`, { method: "DELETE" });
-        await loadStandaloneKeys();
+        $("standaloneStatus").textContent = "删除中...";
+        try {
+          await api(`/api/admin/standalone-keys/${id}`, { method: "DELETE" });
+          $("standaloneStatus").textContent = "已删除";
+          await loadStandaloneKeys();
+        } catch (error) {
+          $("standaloneStatus").textContent = "删除失败：" + error.message;
+        }
+      }
+
+      async function handleStandaloneAction(event) {
+        const button = event.target.closest("button[data-standalone-action]");
+        if (!button) return;
+        const { standaloneAction: action, id } = button.dataset;
+        if (!id) return;
+        button.disabled = true;
+        try {
+          if (action === "toggle") await toggleStandaloneKey(id, button.dataset.enabled === "true");
+          else if (action === "reset") await resetStandaloneDevice(id);
+          else if (action === "delete") await deleteStandaloneKey(id);
+          await loadLogs();
+        } finally {
+          button.disabled = false;
+        }
       }
 
       async function loadCodes() {
@@ -384,10 +419,11 @@
             <td>${Number(item.onlineCount || 0)} 台<br><span class="muted">${item.online ? "在线" : "离线"}</span></td>
             <td>
               <div class="actions">
-                <button type="button" onclick="renew('${item.id}')">续期365</button>
-                <button type="button" onclick="toggleCode('${item.id}', ${!item.enabled})">${item.enabled ? "禁用" : "启用"}</button>
-                <button type="button" onclick="kickCode('${item.id}')">强制下机</button>
-                <button class="danger" type="button" onclick="deleteCode('${item.id}')">删除</button>
+                <button type="button" data-action="renew" data-id="${item.id}">续期365</button>
+                <button type="button" data-action="toggle" data-id="${item.id}" data-enabled="${!item.enabled}">${item.enabled ? "禁用" : "启用"}</button>
+                <button class="warn" type="button" data-action="reset" data-id="${item.id}">重置用户</button>
+                <button type="button" data-action="kick" data-id="${item.id}">强制下机</button>
+                <button class="danger" type="button" data-action="delete" data-id="${item.id}">删除</button>
               </div>
             </td>
           </tr>
@@ -395,33 +431,96 @@
       }
 
       async function renew(id) {
-        await api(`/api/admin/security-codes/${id}/renew`, { method: "POST", body: JSON.stringify({ duration: "365" }) });
-        await loadCodes();
+        $("createStatus").textContent = "续期中...";
+        try {
+          await api(`/api/admin/security-codes/${id}/renew`, { method: "POST", body: JSON.stringify({ duration: "365" }) });
+          $("createStatus").textContent = "已续期";
+          await loadCodes();
+        } catch (error) {
+          $("createStatus").textContent = "续期失败：" + error.message;
+        }
       }
 
       async function toggleCode(id, enabled) {
-        await api(`/api/admin/security-codes/${id}`, { method: "PATCH", body: JSON.stringify({ enabled }) });
-        await loadCodes();
+        $("createStatus").textContent = enabled ? "启用中..." : "禁用中...";
+        try {
+          await api(`/api/admin/security-codes/${id}`, { method: "PATCH", body: JSON.stringify({ enabled }) });
+          $("createStatus").textContent = enabled ? "已启用" : "已禁用，在线设备已下线";
+          await loadCodes();
+          await loadProjects();
+        } catch (error) {
+          $("createStatus").textContent = "操作失败：" + error.message;
+        }
+      }
+
+      async function resetCode(id) {
+        if (!confirm("确认重置该用户？将清空在线设备并要求重新登录。")) return;
+        $("createStatus").textContent = "重置中...";
+        try {
+          await api(`/api/admin/security-codes/${id}/reset`, { method: "POST", body: JSON.stringify({}) });
+          $("createStatus").textContent = "已重置用户登录状态";
+          await loadCodes();
+          await loadProjects();
+        } catch (error) {
+          $("createStatus").textContent = "重置失败：" + error.message;
+        }
       }
 
       async function kickCode(id) {
         if (!confirm("确认强制该访问码所有在线设备下机？")) return;
-        await api(`/api/admin/security-codes/${id}/kick`, { method: "POST", body: JSON.stringify({}) });
-        await loadCodes();
-        await loadProjects();
+        $("createStatus").textContent = "强制下机中...";
+        try {
+          await api(`/api/admin/security-codes/${id}/kick`, { method: "POST", body: JSON.stringify({}) });
+          $("createStatus").textContent = "已强制下机";
+          await loadCodes();
+          await loadProjects();
+        } catch (error) {
+          $("createStatus").textContent = "强制下机失败：" + error.message;
+        }
       }
 
       async function kickAllCodes() {
         if (!confirm("确认强制所有联机设备下机？")) return;
-        await api("/api/admin/security-codes/kick-all", { method: "POST", body: JSON.stringify({}) });
-        await loadCodes();
-        await loadProjects();
+        $("createStatus").textContent = "全部强制下机中...";
+        try {
+          await api("/api/admin/security-codes/kick-all", { method: "POST", body: JSON.stringify({}) });
+          $("createStatus").textContent = "已全部强制下机";
+          await loadCodes();
+          await loadProjects();
+        } catch (error) {
+          $("createStatus").textContent = "全部强制下机失败：" + error.message;
+        }
       }
 
       async function deleteCode(id) {
         if (!confirm("确认删除？数据会逻辑删除并保留日志。")) return;
-        await api(`/api/admin/security-codes/${id}`, { method: "DELETE" });
-        await loadCodes();
+        $("createStatus").textContent = "删除中...";
+        try {
+          await api(`/api/admin/security-codes/${id}`, { method: "DELETE" });
+          $("createStatus").textContent = "已删除";
+          await loadCodes();
+          await loadProjects();
+        } catch (error) {
+          $("createStatus").textContent = "删除失败：" + error.message;
+        }
+      }
+
+      async function handleCodeAction(event) {
+        const button = event.target.closest("button[data-action]");
+        if (!button) return;
+        const { action, id } = button.dataset;
+        if (!id) return;
+        button.disabled = true;
+        try {
+          if (action === "renew") await renew(id);
+          else if (action === "toggle") await toggleCode(id, button.dataset.enabled === "true");
+          else if (action === "reset") await resetCode(id);
+          else if (action === "kick") await kickCode(id);
+          else if (action === "delete") await deleteCode(id);
+          await loadLogs();
+        } finally {
+          button.disabled = false;
+        }
       }
 
       async function loadProjects() {
@@ -462,6 +561,8 @@
       $("searchBtn").onclick = loadCodes;
       $("kickAllBtn").onclick = kickAllCodes;
       $("refreshBtn").onclick = loadAll;
+      $("standaloneRows").addEventListener("click", handleStandaloneAction);
+      $("codeRows").addEventListener("click", handleCodeAction);
     </script>
   </body>
 </html>
