@@ -1,0 +1,18 @@
+{
+  "id": "./fortune-current-pwa",
+  "name": "\u8d22\u795e\u7237\u79bb\u7ebf\u5f55\u5355",
+  "short_name": "\u8d22\u795e\u7237",
+  "description": "\u65ad\u7f51\u4e5f\u80fd\u6253\u5f00\u7684\u5f55\u5355\u5de5\u5177",
+  "start_url": "./index.html?source=pwa",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f7f9fc",
+  "theme_color": "#5443e8",
+  "lang": "zh-CN",
+  "icons": [
+    { "src": "./icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "./icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "./icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
