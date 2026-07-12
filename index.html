@@ -26,7 +26,7 @@
     <link rel="apple-touch-startup-image" href="./splash/splash-1290x2796.png?v=20260703_pwa_1" media="(device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3)" />
     <link rel="apple-touch-startup-image" href="./splash/splash-1536x2048.png?v=20260703_pwa_1" media="(device-width: 768px) and (device-height: 1024px) and (-webkit-device-pixel-ratio: 2)" />
     <link rel="apple-touch-startup-image" href="./splash/splash-2048x2732.png?v=20260703_pwa_1" media="(device-width: 1024px) and (device-height: 1366px) and (-webkit-device-pixel-ratio: 2)" />
-    <link rel="stylesheet" href="./styles.css?v=20260709_order_type_clean" />
+    <link rel="stylesheet" href="./styles.css?v=20260712_ai_remote_test" />
     <style>
       @media (max-width: 640px) {
         .orders-table th:nth-child(11),
@@ -148,6 +148,7 @@
         <div class="ai-example-actions"><button type="button" onclick="FortuneApp.reviseAiExample()">发送纠正</button></div>
       </div>
       <div id="aiExamplesList" class="ai-examples-list"></div>
+      <div class="ai-example-backup-actions"><button type="button" onclick="FortuneApp.exportAiExamples()">导出示例备份</button><label class="button-like" for="aiExamplesImport">导入示例备份</label><input id="aiExamplesImport" type="file" accept="application/json,.json" hidden /></div>
     </dialog>
 
     <section class="blessing-card" aria-label="财神爷祝福">
@@ -386,7 +387,7 @@
     </main>
 
     <script src="./config.js?v=20260709_order_type_clean"></script>
-    <script src="./app.js?v=20260712_ai_teacher"></script>
+    <script src="./app.js?v=20260712_ai_remote_test"></script>
     <script src="./pwa.js?v=20260709_order_type_clean"></script>
   </body>
 </html>

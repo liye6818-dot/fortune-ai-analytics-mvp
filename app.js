@@ -336,6 +336,7 @@ function saveDataBackup() {
     [REPORTED_STORAGE_KEY]: reported,
     [RISK_SETTINGS_KEY]: riskSettings,
     [CUSTOMER_KEY]: customers,
+    [AI_EXAMPLES_KEY]: loadAiExamples(),
     savedAt: new Date().toISOString()
   }));
 }
@@ -1771,8 +1772,10 @@ function useCurrentInputAsExample() { $("aiExampleRaw").value=$("orderInput").va
 async function askLocalAi(prompt) { let lastError; for(const baseUrl of localAiCandidates()){try{if(!isAllowedLocalAiUrl(baseUrl))throw new Error("local-ai-url-only");return cleanAiOrderText(await callOllama(baseUrl,prompt));}catch(error){lastError=error;}} throw lastError||new Error("ai-unavailable"); }
 async function previewAiExample() { const raw=$("aiExampleRaw").value.trim(); if(!raw){$("aiExampleStatus").textContent="请先粘贴原始乱单";return;} $("aiExampleStatus").textContent="AI正在解析..."; try{$("aiExampleCorrect").value=await askLocalAi(aiNormalizePrompt(raw));$("aiExampleStatus").textContent="请核对；不对就直接在下面告诉AI";}catch{$("aiExampleStatus").textContent="本机AI未连接，请确认 Ollama 已启动";} }
 async function reviseAiExample() { const raw=$("aiExampleRaw").value.trim(),current=$("aiExampleCorrect").value.trim(),correction=$("aiExampleCorrection").value.trim(); if(!raw||!current||!correction){$("aiExampleStatus").textContent="需要原单、当前结果和纠正说明";return;} $("aiExampleStatus").textContent="AI正在按你的说法修改..."; const prompt=`你正在学习用户的六合彩录单习惯。只输出修改后的标准订单行，不要解释。\n原始乱单：\n${raw}\n\n当前解析结果：\n${current}\n\n用户纠正：\n${correction}`; try{$("aiExampleCorrect").value=await askLocalAi(prompt);$("aiExampleCorrection").value="";$("aiExampleStatus").textContent="已修改，请继续核对或确认正确并记住";}catch{$("aiExampleStatus").textContent="本机AI未连接，请确认 Ollama 已启动";} }
-function saveAiExample() { const raw=$("aiExampleRaw").value.trim(); const correct=$("aiExampleCorrect").value.trim(); if(!raw||!correct){$("aiExampleStatus").textContent="原始乱单和正确结果都要填写";return;} const items=loadAiExamples(); items.unshift({raw,correct,savedAt:new Date().toISOString()}); safeStorageSet(AI_EXAMPLES_KEY,JSON.stringify(items.slice(0,50))); $("aiExampleRaw").value=""; $("aiExampleCorrect").value=""; $("aiExampleStatus").textContent=`已保存，共 ${Math.min(items.length,50)} 个示例`; renderAiExamples(); }
-function deleteAiExample(index) { const items=loadAiExamples(); items.splice(index,1); safeStorageSet(AI_EXAMPLES_KEY,JSON.stringify(items)); renderAiExamples(); }
+function saveAiExample() { const raw=$("aiExampleRaw").value.trim(); const correct=$("aiExampleCorrect").value.trim(); if(!raw||!correct){$("aiExampleStatus").textContent="原始乱单和正确结果都要填写";return;} const items=loadAiExamples(); items.unshift({raw,correct,savedAt:new Date().toISOString()}); safeStorageSet(AI_EXAMPLES_KEY,JSON.stringify(items.slice(0,50))); saveDataBackup(); $("aiExampleRaw").value=""; $("aiExampleCorrect").value=""; $("aiExampleStatus").textContent=`已保存，共 ${Math.min(items.length,50)} 个示例`; renderAiExamples(); }
+function deleteAiExample(index) { const items=loadAiExamples(); items.splice(index,1); safeStorageSet(AI_EXAMPLES_KEY,JSON.stringify(items)); saveDataBackup(); renderAiExamples(); }
+function exportAiExamples() { const data=JSON.stringify({format:"fortune-ai-examples-v1",examples:loadAiExamples(),exportedAt:new Date().toISOString()},null,2); const blob=new Blob([data],{type:"application/json;charset=utf-8"}); const url=URL.createObjectURL(blob); const link=document.createElement("a"); link.href=url; link.download=`fortune-ai-examples-${new Date().toISOString().slice(0,10)}.json`; link.click(); URL.revokeObjectURL(url); $("aiExampleStatus").textContent=`已导出 ${loadAiExamples().length} 个示例`; }
+async function importAiExamples(event) { const input=event?.target,file=input?.files?.[0]; if(!file)return; try { const data=JSON.parse(await file.text()),incoming=Array.isArray(data)?data:data?.examples; if(!Array.isArray(incoming))throw new Error("invalid-ai-examples"); const merged=[...incoming,...loadAiExamples()].filter((item)=>item?.raw&&item?.correct).filter((item,index,items)=>items.findIndex((candidate)=>candidate.raw===item.raw&&candidate.correct===item.correct)===index).slice(0,50); safeStorageSet(AI_EXAMPLES_KEY,JSON.stringify(merged)); saveDataBackup(); renderAiExamples(); $("aiExampleStatus").textContent=`导入完成，现有 ${merged.length} 个示例`; } catch { $("aiExampleStatus").textContent="导入失败，请选择之前导出的 AI 示例文件"; } finally { input.value=""; } }
 
 async function fetchWithTimeout(url, options = {}, timeoutMs = 45000) {
   const controller = new AbortController();
@@ -2701,6 +2704,7 @@ function exportData() {
   const data = JSON.stringify({
     customers,
     riskSettings,
+    aiExamples: loadAiExamples(),
     privacy: "注单数据不导出，仅保存在本机浏览器",
     exportedAt: new Date().toISOString()
   }, null, 2);
@@ -2811,6 +2815,7 @@ window.FortuneApp = {
   reviseAiExample,
   saveAiExample,
   deleteAiExample,
+  exportAiExamples,
   openEntryTools,
   openMobilePanel,
   closeMobilePanels
@@ -2823,6 +2828,7 @@ function bindControls() {
   setClick("saveParsedBtn", saveParsed);
   setClick("clearInputBtn", clearInput);
   setClick("aiParseBtn", aiParseOrders);
+  on("aiExamplesImport", "change", importAiExamples);
   setClick("fetchLatestDrawBtn", fetchLatestDraw);
   setClick("settleBtn", settleOrders);
   setClick("clearSettlementBtn", clearSettlement);
