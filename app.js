@@ -1734,7 +1734,7 @@ function setOcrStatus(text) {
 }
 
 function localAiCandidates() {
-  return [LOCAL_AI_BASE_URL || "http://127.0.0.1:11434"];
+  return ["http://127.0.0.1:11435", LOCAL_AI_BASE_URL || "http://127.0.0.1:11434"];
 }
 
 function isAllowedLocalAiUrl(baseUrl) {
