@@ -416,7 +416,8 @@ app.get("/api/admin/security-codes", requireAdmin(db), (req, res) => {
     SELECT sc.*,
       (SELECT COUNT(*) FROM sessions s WHERE s.security_code_id = sc.id AND s.revoked_at IS NULL AND s.expires_at > ? AND s.last_seen_at >= ?) AS online_count
     FROM security_codes sc
-    WHERE (? = '%%' OR sc.customer_name LIKE ? OR sc.contact LIKE ? OR sc.remark LIKE ? OR sc.code_preview LIKE ?)
+    WHERE sc.deleted_at IS NULL
+      AND (? = '%%' OR sc.customer_name LIKE ? OR sc.contact LIKE ? OR sc.remark LIKE ? OR sc.code_preview LIKE ?)
     ORDER BY sc.created_at DESC
     LIMIT 200
   `).all(now, onlineSince, q, q, q, q, q);

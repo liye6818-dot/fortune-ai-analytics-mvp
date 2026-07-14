@@ -176,10 +176,11 @@ async function validateSecurityCode(code) {
 }
 
 async function validateAccessCode(code) {
-  const standalone = await validateStandaloneKey(code);
-  if (standalone.ok) return standalone;
-  if (String(code || "").trim().toUpperCase().startsWith("CJY-DJ-")) return standalone;
-  return validateSecurityCode(code);
+  const normalized = normalizeAccessCode(code);
+  if (!normalized.startsWith("CJY-DJ-")) {
+    return { ok: false, message: "单机版仅支持 CJY-DJ 单机访问码。" };
+  }
+  return validateStandaloneKey(normalized);
 }
 
 function setAppLocked(locked) {
