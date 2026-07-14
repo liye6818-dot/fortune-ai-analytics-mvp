@@ -94,6 +94,24 @@
         header { align-items: flex-start; flex-direction: column; }
         .grid { grid-template-columns: 1fr; }
         .table-wrap { overflow-x: auto; }
+        .table-wrap th:last-child,
+        .table-wrap td:last-child {
+          position: sticky;
+          right: 0;
+          z-index: 2;
+          min-width: 112px;
+          background: var(--panel);
+          box-shadow: -6px 0 10px rgba(23, 33, 43, 0.08);
+        }
+        .table-wrap th:last-child {
+          z-index: 3;
+          background: #f9fafc;
+        }
+        .actions {
+          flex-direction: column;
+          align-items: stretch;
+        }
+        .actions button { width: 100%; }
       }
     </style>
   </head>
@@ -347,9 +365,9 @@
             <td>${fmt(item.lastLoginAt)}<br><span class="muted">${esc(item.lastLoginIp || "")}</span></td>
             <td>
               <div class="actions">
+                <button class="danger" type="button" data-standalone-action="delete" data-id="${item.id}">删除</button>
                 <button type="button" data-standalone-action="toggle" data-id="${item.id}" data-enabled="${!item.enabled}">${item.enabled ? "禁用" : "启用"}</button>
                 <button type="button" data-standalone-action="reset" data-id="${item.id}">重置设备</button>
-                <button class="danger" type="button" data-standalone-action="delete" data-id="${item.id}">删除</button>
               </div>
             </td>
           </tr>
@@ -419,11 +437,11 @@
             <td>${Number(item.onlineCount || 0)} 台<br><span class="muted">${item.online ? "在线" : "离线"}</span></td>
             <td>
               <div class="actions">
+                <button class="danger" type="button" data-action="delete" data-id="${item.id}">删除</button>
                 <button type="button" data-action="renew" data-id="${item.id}">续期365</button>
                 <button type="button" data-action="toggle" data-id="${item.id}" data-enabled="${!item.enabled}">${item.enabled ? "禁用" : "启用"}</button>
                 <button class="warn" type="button" data-action="reset" data-id="${item.id}">重置用户</button>
                 <button type="button" data-action="kick" data-id="${item.id}">强制下机</button>
-                <button class="danger" type="button" data-action="delete" data-id="${item.id}">删除</button>
               </div>
             </td>
           </tr>
