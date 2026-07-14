@@ -4,6 +4,7 @@ const CUSTOMER_KEY = "fortune_ai_analytics_mvp_customers";
 const ORDER_STORAGE_KEY = "fortune_ai_analytics_mvp_orders";
 const ADJUST_STORAGE_KEY = "fortune_ai_analytics_mvp_adjustments";
 const REPORTED_STORAGE_KEY = "fortune_ai_analytics_mvp_reported";
+const REPORT_PENDING_KEY = "fortune_ai_analytics_mvp_report_pending_confirmation";
 const LEGACY_LICENSE_SESSION_KEY = "fortune_ai_analytics_mvp_license";
 const OLD_LICENSE_SESSION_KEY = "fortune_ai_analytics_mvp_standalone_license_v2";
 const LICENSE_SESSION_KEY = "fortune_ai_analytics_mvp_access_code_v3";
@@ -94,6 +95,8 @@ let riskSettings = normalizeRiskSettings(loadJson(RISK_SETTINGS_KEY, { limitByRe
 let customers = loadJson(CUSTOMER_KEY, [{ id: "default", name: "散客", odds: 47, oddsByType: { ...defaultOdds }, rebateByType: {}, rebate: 0 }]);
 let accessSession = null;
 let heartbeatTimer = null;
+let reportCopySnapshot = loadJson(REPORT_PENDING_KEY, null);
+let reportReminderArmed = false;
 
 const $ = (id) => document.getElementById(id);
 
@@ -2300,11 +2303,19 @@ function isWinner(order, drawNums) {
   return false;
 }
 
+function winningUnits(order, drawNums) {
+  const special = drawNums[6];
+  if (!special) return 0;
+  if (order.type === "特码") return (order.targets || []).filter((target) => String(target) === pad(special)).length;
+  return isWinner(order, drawNums) ? 1 : 0;
+}
+
 function refreshSettledOrder(order) {
   const drawNums = (order.drawNumbers || []).map((n) => Number(n)).filter((n) => n >= 1 && n <= 49);
   if (drawNums.length !== 7) return order;
-  const hit = isWinner(order, drawNums);
-  const winAmount = hit ? payoutAmount(order) * Number(order.odds || 0) : 0;
+  const hitUnits = winningUnits(order, drawNums);
+  const hit = hitUnits > 0;
+  const winAmount = hit ? payoutAmount(order) * Number(order.odds || 0) * hitUnits : 0;
   const rebateAmount = rebateAmountFor(order.total, order.rebate);
   return {
     ...order,
@@ -2316,6 +2327,10 @@ function refreshSettledOrder(order) {
 }
 
 function settleOrders() {
+  if (reportCopySnapshot) {
+    alert("上一批上报尚未确认发送，请先点击“确认已发送”再结算");
+    return;
+  }
   const nums = parseDrawNumbers();
   if (nums.length !== 7) {
     alert("请输入 7 个开奖号码。");
@@ -2325,8 +2340,9 @@ function settleOrders() {
   const period = $("drawPeriod").value.trim() || "未填期号";
   orders = orders.map((o) => {
     if (o.region !== region) return o;
-    const hit = isWinner(o, nums);
-    const winAmount = hit ? payoutAmount(o) * o.odds : 0;
+    const hitUnits = winningUnits(o, nums);
+    const hit = hitUnits > 0;
+    const winAmount = hit ? payoutAmount(o) * o.odds * hitUnits : 0;
     const rebateAmount = rebateAmountFor(o.total, o.rebate);
     return {
       ...o,
@@ -2405,42 +2421,74 @@ function reportText(rows) {
   return chunks.join("\n");
 }
 
+function persistReportConfirmation() {
+  if (reportCopySnapshot) safeStorageSet(REPORT_PENDING_KEY, JSON.stringify(reportCopySnapshot));
+  else {
+    try { localStorage.removeItem(REPORT_PENDING_KEY); } catch {}
+  }
+}
+
+async function writeReportClipboard(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    $("reportText").value = text;
+    $("reportText").focus();
+    $("reportText").select();
+    return Boolean(document.execCommand?.("copy"));
+  }
+}
+
 async function copyReportList() {
-  const text = $("reportText").value.trim();
+  if (reportCopySnapshot) {
+    if (!confirm("上一批上报尚未点击“确认已发送”。\n确定重新复制上一批内容吗？")) return;
+    $("reportText").value = reportCopySnapshot.text;
+    const copied = await writeReportClipboard(reportCopySnapshot.text);
+    $("riskSummary").textContent = copied ? "上一批已重新复制，仍等待确认发送" : "复制失败，请长按内容复制";
+    return;
+  }
+  const region = $("riskRegion").value;
+  const limit = Number($("riskLimit").value || 0);
+  const rows = riskRowsAtLimit(region, limit).filter((row) => Number(row.pendingReport || 0) > 0);
+  const text = reportText(rows);
   if (!text) {
     alert("没有需要上报的号码。");
     return;
   }
-  try {
-    await navigator.clipboard.writeText(text);
-    $("riskSummary").textContent = "待上报列表已复制";
-  } catch {
-    $("reportText").focus();
-    $("reportText").select();
-    document.execCommand?.("copy");
-    $("riskSummary").textContent = "待上报列表已选中";
-  }
+  reportCopySnapshot = { region, createdAt: new Date().toISOString(), rows: rows.map((row) => ({ label: row.meta.label, pendingReport: Number(row.pendingReport || 0) })), text };
+  persistReportConfirmation();
+  $("reportText").value = text;
+  const copied = await writeReportClipboard(text);
+  $("riskSummary").textContent = copied ? `已复制本批 ${rows.length} 个号码，等待确认发送` : "复制失败，请长按内容复制";
 }
 
 function markReportSubmitted() {
   const region = $("riskRegion").value;
-  const limit = Number($("riskLimit").value || 0);
+  if (!reportCopySnapshot || reportCopySnapshot.region !== region) {
+    alert("请先一键复制，系统会锁定本次上报批次");
+    return;
+  }
   reported[region] = reported[region] || {};
-  riskRowsAtLimit(region, limit).forEach((row) => {
+  reportCopySnapshot.rows.forEach((row) => {
     const pending = Number(row.pendingReport || 0);
     if (pending > 0) {
-      reported[region][row.meta.label] = Number(reported[region][row.meta.label] || 0) + pending;
+      reported[region][row.label] = Number(reported[region][row.label] || 0) + pending;
     }
   });
+  reportCopySnapshot = null;
+  persistReportConfirmation();
   saveAll();
   renderRisk();
-  $("riskSummary").textContent = "当前待上报已标记为已上报";
+  $("riskSummary").textContent = "本批已确认发送";
 }
 
 function clearReportedList() {
   const region = $("riskRegion").value;
   reported[region] = {};
   adjustments[region] = {};
+  reportCopySnapshot = null;
+  persistReportConfirmation();
   saveAll();
   renderRisk();
   $("riskSummary").textContent = "已清空已上报记录";
@@ -2689,6 +2737,10 @@ function renderAll() {
 }
 
 function clearOrders() {
+  if (reportCopySnapshot) {
+    alert("上一批上报尚未确认发送，请先点击“确认已发送”再删除注单");
+    return;
+  }
   const text = prompt("确认清空当前页面注单？清空后不可恢复。请输入：删除全部注单");
   if (text !== "删除全部注单") return;
   orders = [];
@@ -2824,6 +2876,14 @@ window.FortuneApp = {
 };
 
 function bindControls() {
+  if (reportCopySnapshot) setTimeout(() => alert("上一批上报内容尚未确认发送，请确认后点击“确认已发送”"), 0);
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) reportReminderArmed = true;
+    else if (reportReminderArmed && reportCopySnapshot) {
+      reportReminderArmed = false;
+      alert("上一批上报内容尚未确认发送，请确认后点击“确认已发送”");
+    }
+  });
   setClick("parseBtn", parseOrders);
   setClick("addCustomerBtn", addCustomer);
   setClick("saveCustomerSettingsBtn", saveCustomerSettings);

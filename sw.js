@@ -1,4 +1,4 @@
-const PWA_VERSION = "20260707_force_auth2";
+const PWA_VERSION = "20260715_settlement_report11";
 
 self.addEventListener("install", (event) => {
   self.skipWaiting();
