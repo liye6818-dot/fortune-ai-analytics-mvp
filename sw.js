@@ -1,4 +1,4 @@
-const PWA_VERSION = "20260715_settlement_report11";
+const PWA_VERSION = "20260715_access_scope12";
 
 self.addEventListener("install", (event) => {
   self.skipWaiting();
