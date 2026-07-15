@@ -14,15 +14,15 @@ $urls = @(
 )
 
 $failed = $false
-$processes = pm2 jlist | ConvertFrom-Json
-
 foreach ($name in $requiredProcesses) {
-    $process = $processes | Where-Object { $_.name -eq $name } | Select-Object -First 1
-    if ($null -eq $process -or $process.pm2_env.status -ne "online") {
+    $pidText = (& pm2 pid $name | Out-String).Trim()
+    $processId = 0
+    $hasProcessId = [int]::TryParse($pidText, [ref]$processId)
+    if (-not $hasProcessId -or $processId -le 0) {
         Write-Host "[FAIL] PM2 process is not online: $name" -ForegroundColor Red
         $failed = $true
     } else {
-        Write-Host "[OK] PM2 process: $name" -ForegroundColor Green
+        Write-Host "[OK] PM2 process: $name (PID $processId)" -ForegroundColor Green
     }
 }
 
