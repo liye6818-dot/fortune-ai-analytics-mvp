@@ -696,6 +696,7 @@ function normalizeText(text) {
   return String(text || "")
     .replace(/免/g, "兔")
     .replace(/两连/g, "二连")
+    .replace(/([=＝/／?？]\s*)([零一二两三四五六七八九十百千]+)/g, (_, separator, amount) => `${separator}${chineseAmountToNumber(amount) ?? amount}`)
     .replace(/[，、；;·]/g, " ")
     .replace(/[：:]/g, " ")
     .replace(/(?<=\d)\.(?=\d)/g, " ")
@@ -710,6 +711,11 @@ function chineseAmountToNumber(input) {
   const number = Number(text);
   if (!Number.isNaN(number)) return number;
   const digit = { 零: 0, 一: 1, 二: 2, 两: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9 };
+  if (text.endsWith("千")) return (digit[text[0]] || 1) * 1000;
+  if (text.includes("千")) {
+    const [a, b] = text.split("千");
+    return (digit[a] || 1) * 1000 + (b ? chineseAmountToNumber(b) : 0);
+  }
   if (text === "十") return 10;
   if (text.endsWith("百")) return (digit[text[0]] || 1) * 100;
   if (text.includes("百")) {
@@ -2331,6 +2337,10 @@ function winningUnits(order, drawNums) {
   if (!special) return 0;
   if (order.type === "特码") {
     return (order.targets || []).filter((target) => String(target) === pad(special)).length;
+  }
+  if (["平肖", "一肖", "主肖"].includes(order.type)) {
+    const winningZodiacs = new Set(drawNums.map(numberMeta).map((meta) => meta.zodiac));
+    return new Set((order.targets || []).filter((target) => winningZodiacs.has(target))).size;
   }
   return isWinner(order, drawNums) ? 1 : 0;
 }

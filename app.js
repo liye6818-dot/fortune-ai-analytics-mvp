@@ -221,7 +221,8 @@ async function sendHeartbeat() {
     },
     body: JSON.stringify({ deviceInfo: navigator.userAgent })
   }).catch(() => null);
-  if (!response || !response.ok) lockFromServer();
+  if (!response) return;
+  if (!response.ok) lockFromServer();
 }
 
 function startHeartbeat(session) {
@@ -234,7 +235,11 @@ function startHeartbeat(session) {
 }
 
 function unlockApp(key, expires, session = null) {
-  clearAccessCache();
+  safeStorageSet(LICENSE_SESSION_KEY, JSON.stringify({
+    key: normalizeAccessCode(key),
+    expiresAt: expires ? new Date(expires).toISOString() : null,
+    validatedAt: new Date().toISOString()
+  }));
   setAppLocked(false);
   $("lastSaved").textContent = expires ? `授权到期 ${expires.toLocaleDateString()}` : "已授权";
   startHeartbeat(session);
@@ -259,17 +264,34 @@ async function activateLicense() {
 }
 
 function initLicenseGate() {
-  clearAccessCache();
   const remember = $("rememberLicense");
   if (remember) {
-    remember.checked = false;
+    remember.checked = true;
     remember.closest("label")?.setAttribute("hidden", "");
   }
   $("activateBtn").addEventListener("click", activateLicense);
   $("licenseInput").addEventListener("keydown", (event) => {
     if (event.key === "Enter") activateLicense();
   });
-  setAppLocked(true);
+  let cached = null;
+  try { cached = JSON.parse(safeStorageGet(LICENSE_SESSION_KEY) || "null"); } catch { cached = null; }
+  const expiresAt = cached?.expiresAt ? new Date(cached.expiresAt) : null;
+  const validatedAt = cached?.validatedAt ? new Date(cached.validatedAt) : null;
+  const sevenDays = 7 * 24 * 60 * 60 * 1000;
+  const cacheValid = cached?.key && (!expiresAt || expiresAt > new Date()) && validatedAt && Date.now() - validatedAt.getTime() <= sevenDays;
+  if (!cacheValid) {
+    clearAccessCache();
+    setAppLocked(true);
+    return;
+  }
+  setAppLocked(false);
+  $("lastSaved").textContent = expiresAt ? `授权到期 ${expiresAt.toLocaleDateString()}` : "离线授权有效";
+  if (navigator.onLine) {
+    validateAccessCode(cached.key).then((result) => {
+      if (result?.ok) unlockApp(cached.key, result.expires, result.session);
+      else lockFromServer();
+    }).catch(() => {});
+  }
 }
 
 function pad(n) {
@@ -674,6 +696,7 @@ function normalizeText(text) {
   return String(text || "")
     .replace(/免/g, "兔")
     .replace(/两连/g, "二连")
+    .replace(/([=＝/／?？]\s*)([零一二两三四五六七八九十百千]+)/g, (_, separator, amount) => `${separator}${chineseAmountToNumber(amount) ?? amount}`)
     .replace(/[，、；;·]/g, " ")
     .replace(/[：:]/g, " ")
     .replace(/(?<=\d)\.(?=\d)/g, " ")
@@ -688,6 +711,11 @@ function chineseAmountToNumber(input) {
   const number = Number(text);
   if (!Number.isNaN(number)) return number;
   const digit = { 零: 0, 一: 1, 二: 2, 两: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9 };
+  if (text.endsWith("千")) return (digit[text[0]] || 1) * 1000;
+  if (text.includes("千")) {
+    const [a, b] = text.split("千");
+    return (digit[a] || 1) * 1000 + (b ? chineseAmountToNumber(b) : 0);
+  }
   if (text === "十") return 10;
   if (text.endsWith("百")) return (digit[text[0]] || 1) * 100;
   if (text.includes("百")) {
@@ -2308,6 +2336,10 @@ function winningUnits(order, drawNums) {
   const special = drawNums[6];
   if (!special) return 0;
   if (order.type === "特码") return (order.targets || []).filter((target) => String(target) === pad(special)).length;
+  if (["平肖", "一肖", "主肖"].includes(order.type)) {
+    const winningZodiacs = new Set(drawNums.map(numberMeta).map((meta) => meta.zodiac));
+    return new Set((order.targets || []).filter((target) => winningZodiacs.has(target))).size;
+  }
   return isWinner(order, drawNums) ? 1 : 0;
 }
 

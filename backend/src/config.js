@@ -26,6 +26,7 @@ export const config = {
   port: readInt("PORT", 3000),
   adminUsername: process.env.ADMIN_USERNAME || "admin",
   adminPasswordHash: required("ADMIN_PASSWORD_HASH"),
+  adminTotpSecret: process.env.ADMIN_TOTP_SECRET || "",
   sessionSecret: required("SESSION_SECRET"),
   databaseUrl: required("DATABASE_URL"),
   sqliteWalEnabled: readBool("SQLITE_WAL_ENABLED", true),
