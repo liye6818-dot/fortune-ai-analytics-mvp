@@ -84,6 +84,7 @@ CREATE TABLE IF NOT EXISTS project_members (
 CREATE TABLE IF NOT EXISTS sessions (
   id TEXT PRIMARY KEY,
   security_code_id TEXT REFERENCES security_codes(id) ON DELETE CASCADE,
+  standalone_key_id TEXT REFERENCES standalone_keys(id) ON DELETE CASCADE,
   admin_user_id TEXT REFERENCES admin_users(id) ON DELETE CASCADE,
   project_id TEXT REFERENCES projects(id) ON DELETE SET NULL,
   token_hash TEXT NOT NULL UNIQUE,
