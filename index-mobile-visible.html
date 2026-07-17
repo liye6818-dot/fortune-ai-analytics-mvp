@@ -296,11 +296,13 @@
               <option value="香港">香港</option>
             </select>
           </label>
-          <label>调单赔率
-            <input id="adjustOdds" type="number" value="47" min="1" step="0.1" />
+          <label>上报赔率 / 返水设置
+            <span style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+              <input id="adjustOdds" type="number" value="47" min="1" step="0.1" aria-label="上报赔率" />
+              <input id="adjustRebate" type="number" value="0" min="0" step="0.001" aria-label="返水设置" placeholder="返水 0.04" />
+            </span>
           </label>
           <label>智能推荐阈值
-            <input id="adjustRebate" type="hidden" value="0" />
             <button id="smartRiskLimitBtn" class="smart-limit-btn" type="button">计算并填入</button>
             <small id="smartRiskLimitText">按当前盘口推荐</small>
           </label>
@@ -360,6 +362,12 @@
           <summary>
             <span>客户结算区</span>
           </summary>
+          <div class="stats-grid settlement-report-summary">
+            <div><b id="settlementReportStake">0</b><span>上报金额</span></div>
+            <div><b id="settlementReportRebate">0</b><span>上报返水</span></div>
+            <div><b id="settlementReportWin">0</b><span>上报中奖</span></div>
+            <div><b id="settlementReportNet">0</b><span>上报盈亏</span></div>
+          </div>
           <div class="table-wrap settlement-table">
             <table>
               <thead>
@@ -381,8 +389,7 @@
     </main>
 
     <script src="./config.js?v=20260707_force_auth2"></script>
-    <script src="./app-mobile-visible.js?v=20260707_force_auth2"></script>
+    <script src="./app-mobile-visible.js?v=20260718_zodiac_risk_settlement_v1"></script>
     <script src="./pwa.js?v=20260707_force_auth2"></script>
   </body>
 </html>
-
