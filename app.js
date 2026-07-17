@@ -374,6 +374,14 @@ function normalizeRiskSettings(settings) {
     limitByRegion: {
       澳门: Number(settings?.limitByRegion?.澳门 ?? legacyLimit ?? 0),
       香港: Number(settings?.limitByRegion?.香港 ?? legacyLimit ?? 0)
+    },
+    reportOddsByRegion: {
+      澳门: Number(settings?.reportOddsByRegion?.澳门 ?? 47),
+      香港: Number(settings?.reportOddsByRegion?.香港 ?? 47)
+    },
+    reportRebateByRegion: {
+      澳门: Number(settings?.reportRebateByRegion?.澳门 ?? 0),
+      香港: Number(settings?.reportRebateByRegion?.香港 ?? 0)
     }
   };
 }
@@ -386,6 +394,26 @@ function setRiskLimitForRegion(region, limit) {
   riskSettings.limitByRegion = { ...(riskSettings.limitByRegion || {}), [region]: Number(limit || 0) };
   safeStorageSet(RISK_SETTINGS_KEY, JSON.stringify(riskSettings));
   saveDataBackup();
+}
+
+function reportOddsForRegion(region) {
+  return Number(riskSettings.reportOddsByRegion?.[region] ?? 47);
+}
+
+function reportRebateForRegion(region) {
+  return Math.max(0, Number(riskSettings.reportRebateByRegion?.[region] ?? 0));
+}
+
+function setReportSettingsForRegion(region, odds, rebate) {
+  riskSettings.reportOddsByRegion = { ...(riskSettings.reportOddsByRegion || {}), [region]: Number(odds || 47) };
+  riskSettings.reportRebateByRegion = { ...(riskSettings.reportRebateByRegion || {}), [region]: Math.max(0, Number(rebate || 0)) };
+  safeStorageSet(RISK_SETTINGS_KEY, JSON.stringify(riskSettings));
+  saveDataBackup();
+}
+
+function applyReportSettingsToControls(region) {
+  if ($("adjustOdds")) $("adjustOdds").value = money(reportOddsForRegion(region));
+  if ($("adjustRebate")) $("adjustRebate").value = String(reportRebateForRegion(region));
 }
 
 function normalizeCustomer(customer) {
@@ -867,7 +895,7 @@ function detectType(line, fallbackType = "特码") {
   if (isDeferredLine(line)) return "暂不解析";
   if (/特肖|特.*肖/.test(line)) return "特肖";
   if (/主肖/.test(line)) return "主肖";
-  if (/平肖|平特|一肖/.test(line) || new RegExp(`平\\s*[${zodiacOrder.join("")}]`).test(line)) return "一肖";
+  if (/一肖/.test(line) || (zodiacs.length && /平/.test(line))) return "一肖";
   if (/平\s*[0-9]\s*尾|平尾/.test(line)) return "平尾";
   if (/特?[0-4]\s*头|特?[0-9]\s*尾|特?[大小单双]/.test(line)) return "特码";
   if (/半波|红波|蓝波|绿波|波色|红大|红小|蓝大|蓝小|绿大|绿小|红单|蓝单|绿单|红双|蓝双|绿双/.test(line)) return "特码";
@@ -918,6 +946,10 @@ function hasExplicitAmountText(line) {
 
 function hasEachAmountText(line) {
   return new RegExp(`${eachAmountKeywords}|个`).test(String(line || ""));
+}
+
+function hasPerNumberAmountText(line) {
+  return /各数|每数|个数|每个数|各号|每号|个号/.test(String(line || ""));
 }
 
 function detectLooseTrailingAmount(line) {
@@ -1236,8 +1268,8 @@ function parseFlatZodiacAmount(line, fallbackRegion) {
   if (!zodiacs.length) return null;
   let type = "";
   if (/主肖/.test(normalized)) type = "主肖";
-  else if (/平肖|平特|一肖/.test(normalized) || /平\s*[鼠牛虎兔龙蛇马羊猴鸡狗猪]/.test(normalized)) type = "一肖";
-  else if (/特肖|特\s*[鼠牛虎兔龙蛇马羊猴鸡狗猪]/.test(normalized)) type = "特肖";
+  else if (/一肖/.test(normalized) || /平/.test(normalized)) type = "一肖";
+  else if (/特肖/.test(normalized)) type = "特肖";
   if (!type) return null;
   const amount = detectAmount(normalized) || detectLooseTrailingAmount(normalized);
   if (!amount) return null;
@@ -1443,19 +1475,28 @@ function parseZodiacNumberAmount(line, fallbackRegion) {
   if (type === "特肖" || type === "平肖" || type === "一肖" || type === "主肖" || isZodiacComboType(type)) {
     return [makeOrder({ raw: normalized, region, type, targets: zodiacs, amount })];
   }
-  const order = makeOrder({
-    raw: normalized,
-    region,
-    type: "特码",
-    targets: uniqueTargets(zodiacs.flatMap(paddedNumbersForZodiac)),
-    amount
-  });
-  if (!hasEachAmountText(normalized)) {
+  if (hasPerNumberAmountText(normalized)) {
+    return [makeOrder({
+      raw: normalized,
+      region,
+      type: "特码",
+      targets: uniqueTargets(zodiacs.flatMap(paddedNumbersForZodiac)),
+      amount
+    })];
+  }
+  return zodiacs.map((zodiac) => {
+    const order = makeOrder({
+      raw: normalized,
+      region,
+      type: "特码",
+      targets: paddedNumbersForZodiac(zodiac),
+      amount
+    });
     order.packageTotal = true;
     updateOrderTotal(order);
-    order.hint = `包肖总额，每号 ${money(Number(order.amount || 0) / order.targets.length)}`;
-  }
-  return [order];
+    order.hint = `${zodiac}肖总额 ${money(order.amount)}，每号 ${money(Number(order.amount || 0) / order.targets.length)}`;
+    return order;
+  });
 }
 
 function shouldKeepRowsAsSegments(lines) {
@@ -2559,6 +2600,35 @@ function maxSafeRiskLimit(region) {
   return { limit, minProfit: snapshot.balanceTotal - (limit * snapshot.adjustOdds) };
 }
 
+function aggressiveRiskLimit(region, targetLoss = 5000) {
+  const safe = maxSafeRiskLimit(region);
+  const snapshot = riskSnapshot(region, 0);
+  const balances = snapshot.rows.map((row) => Math.max(0, Number(row.rawBalance ?? row.balance ?? 0)));
+  const maxBalance = Math.floor(Math.max(...balances, 0));
+  const start = Math.max(1, Math.floor(Number(safe.limit || 0)) + 1);
+  if (!maxBalance || !snapshot.adjustOdds || start > maxBalance) {
+    return { limit: Math.max(0, Math.floor(Number(safe.limit || 0))), minProfit: Number(safe.minProfit || 0) };
+  }
+  const profitAt = (limit) => {
+    const cappedTotal = balances.reduce((sum, balance) => sum + Math.min(balance, limit), 0);
+    return cappedTotal - (Math.min(maxBalance, limit) * snapshot.adjustOdds);
+  };
+  let best = { limit: start, minProfit: profitAt(start) };
+  const consider = (limit) => {
+    const minProfit = profitAt(limit);
+    const distance = Math.abs(minProfit + targetLoss);
+    const bestDistance = Math.abs(best.minProfit + targetLoss);
+    if (distance < bestDistance || (distance === bestDistance && limit > best.limit)) best = { limit, minProfit };
+  };
+  const step = Math.max(1, Math.ceil((maxBalance - start) / 1000));
+  for (let limit = start; limit <= maxBalance; limit += step) consider(limit);
+  consider(maxBalance);
+  const refineStart = Math.max(start, best.limit - step);
+  const refineEnd = Math.min(maxBalance, best.limit + step);
+  for (let limit = refineStart; limit <= refineEnd; limit += 1) consider(limit);
+  return best;
+}
+
 function applySmartRiskLimit() {
   const region = $("riskRegion").value;
   const recommendation = maxSafeRiskLimit(region);
@@ -2571,6 +2641,13 @@ function applySmartRiskLimit() {
 function changeRiskRegion() {
   const region = $("riskRegion").value;
   $("riskLimit").value = money(riskLimitForRegion(region));
+  applyReportSettingsToControls(region);
+  renderRisk();
+}
+
+function updateReportSettingsFromInput() {
+  const region = $("riskRegion").value;
+  setReportSettingsForRegion(region, $("adjustOdds").value, $("adjustRebate").value);
   renderRisk();
 }
 
@@ -2594,9 +2671,11 @@ function renderRisk() {
   $("specialRiskCheck").textContent = `${money(specialOrderTotal)} - ${money(reportTotal)} = ${money(balanceTotal)}${riskDiff ? ` 差${money(riskDiff)}` : ""}`;
   $("reportTotal").textContent = money(reportTotal);
   const smartLimit = maxSafeRiskLimit(region);
-  $("smartRiskLimitText").textContent = smartLimit.unsafe
-    ? `推荐 ${money(smartLimit.limit)}，仍亏 ${money(smartLimit.minProfit)}`
-    : `推荐 ${money(smartLimit.limit)}，最坏 ${money(smartLimit.minProfit)}`;
+  const aggressiveLimit = aggressiveRiskLimit(region, 5000);
+  const smartLabel = smartLimit.unsafe
+    ? `推荐 ${money(smartLimit.limit)}（仍亏 ${money(smartLimit.minProfit)}）`
+    : `推荐 ${money(smartLimit.limit)}`;
+  $("smartRiskLimitText").textContent = `${smartLabel}，激进 ${money(aggressiveLimit.limit)}（最坏约 ${money(aggressiveLimit.minProfit)}）`;
   const reportRows = rows.filter((r) => r.pendingReport > 0);
   $("riskSummary").textContent = `${region} 49 号码风险，待上报 ${reportRows.length} 个`;
   $("reportText").value = reportText(reportRows);
@@ -2640,6 +2719,7 @@ function updateRiskLimitFromInput() {
 }
 
 function renderCustomerSettlement() {
+  renderReportSettlement();
   const grouped = new Map();
   orders.forEach((order) => {
     const name = order.customerName || "散客";
@@ -2690,6 +2770,29 @@ function renderCustomerSettlement() {
       <td class="${item.net >= 0 ? "bad" : "ok"}">${money(item.net)}</td>
     </tr>
   `).join("") : `<tr><td colspan="6" class="muted-cell">开奖后按客户汇总结算</td></tr>`;
+}
+
+function reportSettlementSummary(region) {
+  const reportMap = reported[region] || {};
+  const reportAmount = Object.values(reportMap).reduce((sum, value) => sum + Math.max(0, Number(value || 0)), 0);
+  const reportRebate = reportAmount * reportRebateForRegion(region);
+  const settledOrder = orders.find((order) => order.region === region && Array.isArray(order.drawNumbers) && order.drawNumbers.length === 7);
+  const special = settledOrder ? pad(Number(settledOrder.drawNumbers[6])) : "";
+  const winningStake = special ? Math.max(0, Number(reportMap[special] || 0)) : 0;
+  const reportWin = winningStake * reportOddsForRegion(region);
+  return { reportAmount, reportRebate, reportWin, reportNet: reportWin + reportRebate - reportAmount };
+}
+
+function renderReportSettlement() {
+  const region = $("drawRegion")?.value || $("riskRegion")?.value || "澳门";
+  const summary = reportSettlementSummary(region);
+  if ($("settlementReportStake")) $("settlementReportStake").textContent = money(summary.reportAmount);
+  if ($("settlementReportRebate")) $("settlementReportRebate").textContent = money(summary.reportRebate);
+  if ($("settlementReportWin")) $("settlementReportWin").textContent = money(summary.reportWin);
+  if ($("settlementReportNet")) {
+    $("settlementReportNet").textContent = money(summary.reportNet);
+    $("settlementReportNet").className = summary.reportNet >= 0 ? "ok" : "bad";
+  }
 }
 
 function renderOrders() {
@@ -2972,8 +3075,9 @@ populateDefaultTypeSelect();
 bindControls();
 bindDrawBlessingVideo();
 on("riskRegion", "change", changeRiskRegion);
-on("adjustOdds", "input", renderRisk);
-on("adjustRebate", "input", renderRisk);
+on("adjustOdds", "input", updateReportSettingsFromInput);
+on("adjustRebate", "input", updateReportSettingsFromInput);
+on("drawRegion", "change", renderCustomerSettlement);
 on("smartRiskLimitBtn", "click", applySmartRiskLimit);
 on("riskLimit", "input", updateRiskLimitFromInput);
 on("orderSearch", "input", renderOrders);
@@ -2985,7 +3089,10 @@ if (customerCleanup.changed) {
   saveDataBackup();
 }
 
-if ($("riskLimit") && $("riskRegion")) $("riskLimit").value = money(riskLimitForRegion($("riskRegion").value));
+if ($("riskLimit") && $("riskRegion")) {
+  $("riskLimit").value = money(riskLimitForRegion($("riskRegion").value));
+  applyReportSettingsToControls($("riskRegion").value);
+}
 on("orderInput", "input", resizeOrderInput);
 runSafe(resizeOrderInput);
 runSafe(initLicenseGate);
