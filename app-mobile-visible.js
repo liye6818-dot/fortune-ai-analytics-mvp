@@ -153,7 +153,11 @@ async function validateStandaloneKey(key) {
     if (body.error === "standalone_key_expired") return { ok: false, message: "访问码已失效，请联系管理员处理。" };
     return { ok: false, message: "访问码无效，请检查后重试。" };
   }
-  return { ok: true, expires: body.item?.expiresAt ? new Date(body.item.expiresAt) : null };
+  return {
+    ok: true,
+    expires: body.item?.expiresAt ? new Date(body.item.expiresAt) : null,
+    session: { token: body.token, csrfToken: body.csrfToken }
+  };
 }
 
 async function validateSecurityCode(code) {
