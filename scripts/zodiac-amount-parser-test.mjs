@@ -33,14 +33,7 @@ vm.runInContext(parserSource, sandbox, { filename: "app.js" });
 const parse = (text) => sandbox.__parseInputText(text, "澳门", "特码");
 const total = (orders) => orders.reduce((sum, order) => sum + Number(order.total || 0), 0);
 
-const zodiacPackages = parse("龙虎牛狗各20");
-assert.equal(zodiacPackages.length, 4);
-assert.ok(zodiacPackages.every((order) => order.type === "特码"));
-assert.ok(zodiacPackages.every((order) => order.packageTotal === true));
-assert.equal(total(zodiacPackages), 80);
-assert.equal(zodiacPackages.flatMap((order) => order.targets).length, 16);
-
-for (const text of ["龙虎牛狗各数20", "龙虎牛狗各号20"]) {
+for (const text of ["龙虎牛狗各20", "龙虎牛狗各数20", "龙虎牛狗各号20", "龙虎牛狗各肖20"]) {
   const perNumber = parse(text);
   assert.equal(perNumber.length, 1, text);
   assert.equal(perNumber[0].type, "特码", text);
