@@ -919,10 +919,6 @@ function hasEachAmountText(line) {
   return new RegExp(`${eachAmountKeywords}|个`).test(String(line || ""));
 }
 
-function hasPerNumberAmountText(line) {
-  return /各数|每数|个数|每个数|各号|每号|个号/.test(String(line || ""));
-}
-
 function detectLooseTrailingAmount(line) {
   const cleaned = normalizeText(line)
     .replace(/澳门|香港|澳|港/g, " ")
@@ -1418,28 +1414,19 @@ function parseZodiacNumberAmount(line, fallbackRegion) {
   if (type === "特肖" || type === "平肖" || type === "一肖" || type === "主肖" || isZodiacComboType(type)) {
     return [makeOrder({ raw: normalized, region, type, targets: zodiacs, amount })];
   }
-  if (hasPerNumberAmountText(normalized)) {
-    return [makeOrder({
-      raw: normalized,
-      region,
-      type: "特码",
-      targets: uniqueTargets(zodiacs.flatMap(paddedNumbersForZodiac)),
-      amount
-    })];
-  }
-  return zodiacs.map((zodiac) => {
-    const order = makeOrder({
-      raw: normalized,
-      region,
-      type: "特码",
-      targets: paddedNumbersForZodiac(zodiac),
-      amount
-    });
+  const order = makeOrder({
+    raw: normalized,
+    region,
+    type: "特码",
+    targets: uniqueTargets(zodiacs.flatMap(paddedNumbersForZodiac)),
+    amount
+  });
+  if (!hasEachAmountText(normalized)) {
     order.packageTotal = true;
     updateOrderTotal(order);
-    order.hint = `${zodiac}肖总额 ${money(order.amount)}，每号 ${money(Number(order.amount || 0) / order.targets.length)}`;
-    return order;
-  });
+    order.hint = `包肖总额，每号 ${money(Number(order.amount || 0) / order.targets.length)}`;
+  }
+  return [order];
 }
 
 function shouldKeepRowsAsSegments(lines) {
