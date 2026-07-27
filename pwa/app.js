@@ -18,6 +18,10 @@ const CORS_PROXY = APP_CONFIG.CORS_PROXY || "";
 const TESSERACT_SCRIPT_URL = APP_CONFIG.TESSERACT_SCRIPT_URL || "";
 const LOCAL_AI_BASE_URL = APP_CONFIG.LOCAL_AI_BASE_URL || "";
 const LOCAL_AI_MODEL = APP_CONFIG.LOCAL_AI_MODEL || "";
+const WEBLLM_MODULE_URL = APP_CONFIG.WEBLLM_MODULE_URL || "";
+const WEBLLM_MODEL = APP_CONFIG.WEBLLM_MODEL || "Qwen2.5-0.5B-Instruct-q4f16_1-MLC";
+const WEBLLM_READY_KEY = `fortune_webllm_ready_${WEBLLM_MODEL}`;
+const IOS_AI_TEST_KEY = "fortune_ios_ai_private_test_v1";
 const API_BASE_URL = String(APP_CONFIG.API_BASE_URL || (location.protocol === "file:" ? "http://127.0.0.1:3000" : "")).replace(/\/+$/, "");
 
 function apiUrl(path) {
@@ -1793,6 +1797,14 @@ function setOcrStatus(text) {
   if (status) status.textContent = text || "";
 }
 
+let webLlmEnginePromise = null;
+function browserAiSupported() { return location.protocol === "https:" && Boolean(navigator.gpu) && Boolean(WEBLLM_MODULE_URL); }
+function iosAiTestEnabled() { const mode=new URLSearchParams(location.search).get("iosai");if(mode==="enable")safeStorageSet(IOS_AI_TEST_KEY,"1");if(mode==="disable")localStorage.removeItem(IOS_AI_TEST_KEY);return safeStorageGet(IOS_AI_TEST_KEY)==="1"; }
+function prefersBrowserAi() { return /iPhone|iPad|iPod/i.test(navigator.userAgent) && iosAiTestEnabled(); }
+function setAiProgress(report={}) { const percent=Math.max(0,Math.min(100,Math.round(Number(report.progress||0)*100))),downloading=percent>0&&percent<100; setOcrStatus(downloading?`手机AI模型下载中 ${percent}%`:(String(report.text||"")||"手机AI正在启动...")); const button=$("aiParseBtn"); if(button){button.disabled=downloading;button.textContent=downloading?`下载模型 ${percent}%`:"AI解析";} }
+async function browserAiEngine() { if(!browserAiSupported())throw new Error("webgpu-unavailable"); if(!webLlmEnginePromise){if(safeStorageGet(WEBLLM_READY_KEY)!=="1"&&!window.confirm("首次使用需要通过 Wi-Fi 下载约 1GB 手机AI模型。下载后会保存在本机，可离线解析。现在下载吗？"))throw new Error("model-download-cancelled"); webLlmEnginePromise=(async()=>{await navigator.storage?.persist?.().catch(()=>false);const webllm=await import(WEBLLM_MODULE_URL);const engine=await webllm.CreateMLCEngine(WEBLLM_MODEL,{appConfig:{...webllm.prebuiltAppConfig,cacheBackend:"indexeddb"},initProgressCallback:setAiProgress});safeStorageSet(WEBLLM_READY_KEY,"1");setAiProgress({progress:1,text:"手机AI已就绪"});return engine;})().catch((error)=>{webLlmEnginePromise=null;throw error;});} return webLlmEnginePromise; }
+async function callBrowserAi(prompt) { const engine=await browserAiEngine();setOcrStatus("手机AI正在整理...");const response=await engine.chat.completions.create({messages:[{role:"user",content:prompt}],temperature:0.1,max_tokens:800});return String(response?.choices?.[0]?.message?.content||"").trim(); }
+
 function localAiCandidates() {
   return ["http://127.0.0.1:11435", LOCAL_AI_BASE_URL || "http://127.0.0.1:11434"];
 }
@@ -1831,7 +1843,7 @@ function renderAiExamples() { const list=$("aiExamplesList"); if(!list)return; c
 function openAiExamplesDialog() { const dialog=$("aiExamplesDialog"); if(!dialog)return; renderAiExamples(); if(typeof dialog.showModal==="function")dialog.showModal(); else { dialog.setAttribute("open",""); dialog.classList.add("fallback-open"); } }
 function closeAiExamplesDialog() { const dialog=$("aiExamplesDialog"); if(!dialog)return; if(typeof dialog.close==="function"&&dialog.open&&!dialog.classList.contains("fallback-open"))dialog.close(); else { dialog.classList.remove("fallback-open"); dialog.removeAttribute("open"); } }
 function useCurrentInputAsExample() { $("aiExampleRaw").value=$("orderInput").value.trim(); $("aiExampleStatus").textContent="已带入当前输入，请填写并核对正确结果"; }
-async function askLocalAi(prompt) { let lastError; for(const baseUrl of localAiCandidates()){try{if(!isAllowedLocalAiUrl(baseUrl))throw new Error("local-ai-url-only");return cleanAiOrderText(await callOllama(baseUrl,prompt));}catch(error){lastError=error;}} throw lastError||new Error("ai-unavailable"); }
+async function askLocalAi(prompt) { let lastError; if(prefersBrowserAi()&&browserAiSupported()){try{return cleanAiOrderText(await callBrowserAi(prompt));}catch(error){if(error?.message==="model-download-cancelled")throw error;lastError=error;}} for(const baseUrl of localAiCandidates()){try{if(!isAllowedLocalAiUrl(baseUrl))throw new Error("local-ai-url-only");return cleanAiOrderText(await callOllama(baseUrl,prompt));}catch(error){lastError=error;}} throw lastError||new Error("ai-unavailable"); }
 async function previewAiExample() { const raw=$("aiExampleRaw").value.trim(); if(!raw){$("aiExampleStatus").textContent="请先粘贴原始乱单";return;} $("aiExampleStatus").textContent="AI正在解析..."; try{$("aiExampleCorrect").value=await askLocalAi(aiNormalizePrompt(raw));$("aiExampleStatus").textContent="请核对；不对就直接在下面告诉AI";}catch{$("aiExampleStatus").textContent="本机AI未连接，请确认 Ollama 已启动";} }
 async function reviseAiExample() { const raw=$("aiExampleRaw").value.trim(),current=$("aiExampleCorrect").value.trim(),correction=$("aiExampleCorrection").value.trim(); if(!raw||!current||!correction){$("aiExampleStatus").textContent="需要原单、当前结果和纠正说明";return;} $("aiExampleStatus").textContent="AI正在按你的说法修改..."; const prompt=`你正在学习用户的六合彩录单习惯。只输出修改后的标准订单行，不要解释。\n原始乱单：\n${raw}\n\n当前解析结果：\n${current}\n\n用户纠正：\n${correction}`; try{$("aiExampleCorrect").value=await askLocalAi(prompt);$("aiExampleCorrection").value="";$("aiExampleStatus").textContent="已修改，请继续核对或确认正确并记住";}catch{$("aiExampleStatus").textContent="本机AI未连接，请确认 Ollama 已启动";} }
 function saveAiExample() { const raw=$("aiExampleRaw").value.trim(); const correct=$("aiExampleCorrect").value.trim(); if(!raw||!correct){$("aiExampleStatus").textContent="原始乱单和正确结果都要填写";return;} const items=loadAiExamples(); items.unshift({raw,correct,savedAt:new Date().toISOString()}); safeStorageSet(AI_EXAMPLES_KEY,JSON.stringify(items.slice(0,50))); void syncAiExamplesWithBridge(items.slice(0,50)); saveDataBackup(); $("aiExampleRaw").value=""; $("aiExampleCorrect").value=""; $("aiExampleStatus").textContent=`已保存，共 ${Math.min(items.length,50)} 个示例`; renderAiExamples(); }
@@ -1893,24 +1905,22 @@ async function aiParseOrders() {
   applyParseContextToControls(context);
   const prompt = aiNormalizePrompt(raw);
   setOcrStatus("AI正在整理...");
-  let lastError;
-  for (const baseUrl of localAiCandidates()) {
-    try {
-      if (!isAllowedLocalAiUrl(baseUrl)) throw new Error("local-ai-url-only");
-      const text = await callOllama(baseUrl, prompt);
-      const cleaned = cleanAiOrderText(text);
-      if (!cleaned) throw new Error("empty-ai-result");
-      input.value = cleaned;
-      resizeOrderInput();
-      parseOrders();
-      setOcrStatus(`AI已整理，请核对后入库`);
-      return;
-    } catch (error) {
-      lastError = error;
-    }
+  try {
+    const cleaned = await askLocalAi(prompt);
+    if (!cleaned) throw new Error("empty-ai-result");
+    input.value = cleaned;
+    resizeOrderInput();
+    parseOrders();
+    setOcrStatus("AI已整理，请核对后入库");
+  } catch (error) {
+    console.warn(error);
+    if (error?.message === "model-download-cancelled") setOcrStatus("已取消模型下载");
+    else if (!browserAiSupported() && prefersBrowserAi()) setOcrStatus("当前Safari不支持手机本地AI，请升级iOS后重试");
+    else setOcrStatus("手机AI启动失败，请检查网络和可用存储空间");
+  } finally {
+    const button = $("aiParseBtn");
+    if (button) { button.disabled = false; button.textContent = "AI解析"; }
   }
-  console.warn(lastError);
-  setOcrStatus("AI解析失败，仅允许连接本机 Ollama");
 }
 
 function loadScript(src) {

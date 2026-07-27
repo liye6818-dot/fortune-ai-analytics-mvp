@@ -5,5 +5,7 @@ window.APP_CONFIG = {
   CORS_PROXY: "",
   TESSERACT_SCRIPT_URL: "",
   LOCAL_AI_BASE_URL: "http://127.0.0.1:11434",
-  LOCAL_AI_MODEL: "qwen2.5:3b"
+  LOCAL_AI_MODEL: "qwen2.5:3b",
+  WEBLLM_MODULE_URL: "https://esm.run/@mlc-ai/web-llm@0.2.84",
+  WEBLLM_MODEL: "Qwen2.5-0.5B-Instruct-q4f16_1-MLC"
 };
