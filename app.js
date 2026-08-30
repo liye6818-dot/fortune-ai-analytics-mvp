@@ -2898,38 +2898,17 @@ function renderParsed() {
           <option value="香港" ${o.region === "香港" ? "selected" : ""}>香港</option>
         </select>
       </td>
-      <td>
-        <select class="parsed-edit" data-index="${index}" data-field="type">
-          ${visiblePlayTypes.map((type) => `<option value="${type}" ${o.type === type ? "selected" : ""}>${type}</option>`).join("")}
-        </select>
-      </td>
+      <td><span class="parsed-type-label">${htmlEscape(o.type)}</span></td>
       <td class="targets-cell">
-        <div class="parsed-mobile-controls">
-          <select class="parsed-edit" data-index="${index}" data-field="type">
-            ${visiblePlayTypes.map((type) => `<option value="${type}" ${o.type === type ? "selected" : ""}>${type}</option>`).join("")}
-          </select>
-          <button class="plain danger-text parsed-delete" data-index="${index}" type="button">删除本行</button>
-        </div>
         <textarea class="parsed-edit parsed-targets" data-index="${index}" data-field="targets" rows="2">${htmlEscape(o.targets.join(" "))}</textarea>
       </td>
       <td><input class="parsed-edit parsed-number" data-index="${index}" data-field="amount" type="number" min="0" step="0.01" value="${money(o.amount)}" /></td>
       <td><input class="parsed-edit parsed-number" data-index="${index}" data-field="odds" type="number" min="0" step="0.01" value="${money(o.odds)}" /></td>
       <td>${money(o.total)}</td>
       <td class="${o.warnings.length ? "warn" : "ok"}">${o.warnings.join("，") || o.hint || "可入库"}</td>
-      <td><button class="plain parsed-duplicate" data-index="${index}" type="button">复制</button><button class="plain danger-text parsed-delete" data-index="${index}" type="button">删除</button></td>
     </tr>
   `).join("");
   $("parsedRows").querySelectorAll(".parsed-edit").forEach((input) => input.addEventListener("change", updateParsedFromEdit));
-  $("parsedRows").querySelectorAll(".parsed-delete").forEach((button) => {
-    button.addEventListener("click", () => {
-      parsed.splice(Number(button.dataset.index), 1);
-      renderParsed();
-      renderDeferred();
-    });
-  });
-  $("parsedRows").querySelectorAll(".parsed-duplicate").forEach((button) => {
-    button.addEventListener("click", () => duplicateParsedOrder(Number(button.dataset.index)));
-  });
 }
 
 function duplicateParsedOrder(index) {
