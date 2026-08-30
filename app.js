@@ -11,7 +11,7 @@ const LICENSE_SESSION_KEY = "fortune_ai_analytics_mvp_access_code_v3";
 const DEVICE_KEY = "fortune_ai_analytics_mvp_device";
 const DATA_BACKUP_KEY = "fortune_ai_analytics_mvp_backup";
 const AI_EXAMPLES_KEY = "fortune_ai_analytics_mvp_ai_examples_v1";
-const SETTLEMENT_MANUAL_KEY = "fortune_customer_settlement_manual_v1";
+const SETTLEMENT_MANUAL_KEY = "fortune_source_item_settlement_manual_v2";
 const LEARNING_SETTINGS_KEY = "fortune_parser_learning_settings_single_v1";
 const LEARNING_CASES_KEY = "fortune_parser_learning_cases_single_v1";
 const LEARNING_RULES_KEY = "fortune_parser_learning_rules_single_v1";
@@ -1796,14 +1796,43 @@ function refreshParsedOrder(index) {
   order.warnings = validateParsedOrder(order);
 }
 
+function cleanSourceItemText(value) {
+  return String(value || "")
+    .replace(/（(?:人工拆分|人工新增|拆分\d+)）$/g, "")
+    .trim();
+}
+
+function attachSourceItems(items, forceNew = false) {
+  const sourceMap = new Map();
+  const batchId = `src_${makeId()}`;
+  let nextIndex = 1;
+  return (items || []).map((order) => {
+    if (order.sourceItemId && !forceNew) return order;
+    const sourceText = cleanSourceItemText(order.sourceItemText || order.raw) || `人工项目${nextIndex}`;
+    const key = forceNew && order.sourceItemId ? order.sourceItemId : (normalizeText(sourceText) || sourceText);
+    if (!sourceMap.has(key)) {
+      sourceMap.set(key, { id: `${batchId}_${nextIndex}`, index: nextIndex, text: sourceText });
+      nextIndex += 1;
+    }
+    const source = sourceMap.get(key);
+    return {
+      ...order,
+      sourceBatchId: batchId,
+      sourceItemId: source.id,
+      sourceItemIndex: source.index,
+      sourceItemText: source.text
+    };
+  });
+}
+
 function parseOrders(learningSourceText = null) {
   const context = parseInputContext($("orderInput").value);
   const learningSource = typeof learningSourceText === "string" ? learningSourceText : $("orderInput").value;
   applyParseContextToControls(context);
-  parsed = parseInputText(context.text, context.region, $("defaultType")?.value || "特码")
+  parsed = attachSourceItems(parseInputText(context.text, context.region, $("defaultType")?.value || "特码")
     .flatMap(expandZodiacComboOrder)
     .flatMap(expandMainZodiacSingles)
-    .map((order) => applyCustomerDefaults(order, context.customer));
+    .map((order) => applyCustomerDefaults(order, context.customer)));
   learningSnapshot = {
     sourceText: learningSource,
     originalResult: learningOrdersValue(parsed),
@@ -1824,6 +1853,7 @@ function parseOrders(learningSourceText = null) {
   if (!learningAppliedCaseId) parsed = applyZodiacGroupedLearningRule(learningSource, parsed);
   if (!learningAppliedCaseId) parsed = applyExactLearningCase(learningSource, parsed);
   if (!learningAppliedCaseId && learningLastDecision.caseId !== "builtin-each-number-x-v1") parsed = applyConfirmedAdditionRules(learningSource, parsed);
+  parsed = attachSourceItems(parsed, Boolean(learningAppliedCaseId));
   renderParsed();
   renderDeferred();
   renderLearningEntryStatus();
@@ -1996,7 +2026,10 @@ function buildLearningTemplate(sourceText, correctedResult) {
         type: order.type,
         targets,
         amountTokenIndex,
-        amountValue: Number(order.amount || 0)
+        amountValue: Number(order.amount || 0),
+        sourceItemId: order.sourceItemId || "",
+        sourceItemIndex: Number(order.sourceItemIndex || 0),
+        sourceItemText: order.sourceItemText || order.raw || sourceText
       };
     })
   };
@@ -2033,7 +2066,12 @@ function materializeLearningTemplate(item, sourceText, allowPatternMismatch = fa
     const amount = definition.amountTokenIndex >= 0 && tokens[definition.amountTokenIndex] != null
       ? Number(tokens[definition.amountTokenIndex])
       : Number(definition.amountValue || 0);
-    return applyCustomerDefaults(makeOrder({ raw: sourceText, region: definition.region, type: definition.type, targets, amount }), customer);
+    return {
+      ...applyCustomerDefaults(makeOrder({ raw: definition.sourceItemText || sourceText, region: definition.region, type: definition.type, targets, amount }), customer),
+      sourceItemId: definition.sourceItemId || "",
+      sourceItemIndex: Number(definition.sourceItemIndex || 0),
+      sourceItemText: definition.sourceItemText || sourceText
+    };
   });
 }
 
@@ -2079,7 +2117,10 @@ function learningOrderValue(order) {
     type: order.type || "",
     targets: Array.isArray(order.targets) ? order.targets.map(String) : [],
     amount: Number(order.amount || 0),
-    odds: Number(order.odds || 0)
+    odds: Number(order.odds || 0),
+    sourceItemId: order.sourceItemId || "",
+    sourceItemIndex: Number(order.sourceItemIndex || 0),
+    sourceItemText: order.sourceItemText || order.raw || ""
   };
 }
 
@@ -2256,12 +2297,17 @@ function applyExactLearningCase(sourceText, baseline) {
   }
   const customer = currentCustomer();
   const learned = item.correctedResult.map((order) => applyCustomerDefaults(makeOrder({
-    raw: sourceText,
+    raw: order.sourceItemText || sourceText,
     region: order.region,
     type: order.type,
     targets: order.targets,
     amount: order.amount
-  }), customer));
+  }), customer)).map((learnedOrder, index) => ({
+    ...learnedOrder,
+    sourceItemId: item.correctedResult[index]?.sourceItemId || "",
+    sourceItemIndex: Number(item.correctedResult[index]?.sourceItemIndex || 0),
+    sourceItemText: item.correctedResult[index]?.sourceItemText || sourceText
+  }));
   learned.forEach((order) => {
     updateOrderTotal(order);
     order.warnings = validateParsedOrder(order);
@@ -2903,6 +2949,7 @@ function duplicateParsedOrder(index) {
 
 function addParsedOrder() {
   const customer = currentCustomer();
+  const source = parsed[parsed.length - 1];
   const order = applyCustomerDefaults(makeOrder({
     raw: `${$("orderInput")?.value || ""}（人工新增）`,
     region: $("defaultRegion")?.value || "澳门",
@@ -2910,6 +2957,12 @@ function addParsedOrder() {
     targets: [],
     amount: 0
   }), customer);
+  if (source?.sourceItemId) {
+    order.sourceBatchId = source.sourceBatchId;
+    order.sourceItemId = source.sourceItemId;
+    order.sourceItemIndex = source.sourceItemIndex;
+    order.sourceItemText = source.sourceItemText;
+  }
   parsed.push(order);
   renderParsed();
   renderDeferred();
@@ -3041,13 +3094,15 @@ function saveParsed() {
   const remember = $("rememberCorrection")?.checked;
   const remembered = remember && saveLearningCase();
   const customer = currentCustomer();
+  const savedAt = new Date().toISOString();
   orders = [...valid.map((o) => ({
     ...o,
     customerId: customer.id,
     customerName: customer.name,
     rebate: Number(o.rebate ?? customerRebate(customer, o) ?? 0),
     id: makeId(),
-    createdAt: new Date().toISOString()
+    createdAt: savedAt,
+    sourceSavedAt: savedAt
   })), ...orders];
   parsed = [];
   deferredLines = [];
@@ -3515,87 +3570,86 @@ function updateRiskLimitFromInput() {
 
 function renderCustomerSettlement() {
   renderReportSettlement();
-  const grouped = new Map();
+  const customersMap = new Map();
   orders.forEach((order) => {
     const name = order.customerName || "散客";
-    if (!grouped.has(name)) grouped.set(name, { name, count: 0, total: 0, win: 0, rebate: 0, net: 0, winners: [], orders: [] });
-    const item = grouped.get(name);
-    item.count += 1;
-    item.total += Number(order.total || 0);
-    item.win += Number(order.winAmount || 0);
-    item.rebate += Number(order.rebateAmount ?? rebateAmountFor(order.total, order.rebate));
-    item.net += Number(order.profit || 0);
-    if (Number(order.winAmount || 0) > 0) item.winners.push(order);
-    item.orders.push(order);
+    if (!customersMap.has(name)) customersMap.set(name, { name, sourceItems: new Map() });
+    const customer = customersMap.get(name);
+    const sourceId = order.sourceItemId || `legacy_${order.id}`;
+    if (!customer.sourceItems.has(sourceId)) {
+      customer.sourceItems.set(sourceId, {
+        id: sourceId,
+        index: Number(order.sourceItemIndex || 0),
+        text: order.sourceItemText || order.raw || `${order.region || ""} ${order.type || ""} ${(order.targets || []).join(" ")}`.trim(),
+        savedAt: order.sourceSavedAt || order.createdAt || "",
+        orders: []
+      });
+    }
+    customer.sourceItems.get(sourceId).orders.push(order);
   });
-  const rows = [...grouped.values()].sort((a, b) => a.net - b.net || b.total - a.total);
+  const rows = [...customersMap.values()].map((customer) => {
+    customer.items = [...customer.sourceItems.values()]
+      .sort((a, b) => String(a.savedAt).localeCompare(String(b.savedAt)) || a.index - b.index)
+      .map((item, displayIndex) => {
+        const baseTotal = item.orders.reduce((sum, order) => sum + Number(order.total || 0), 0);
+        const baseWin = item.orders.reduce((sum, order) => sum + Number(order.winAmount || 0), 0);
+        const baseRebate = item.orders.reduce((sum, order) => sum + Number(order.rebateAmount ?? rebateAmountFor(order.total, order.rebate)), 0);
+        const manual = settlementManual[item.id] || {};
+        const total = settlementManualNumber(manual.total, baseTotal);
+        const win = settlementManualNumber(manual.win, baseWin);
+        const rebate = settlementManualNumber(manual.rebate, baseRebate);
+        return { ...item, displayIndex: displayIndex + 1, baseTotal, baseWin, baseRebate, total, win, rebate, net: win + rebate - total, manual };
+      });
+    customer.total = customer.items.reduce((sum, item) => sum + item.total, 0);
+    customer.win = customer.items.reduce((sum, item) => sum + item.win, 0);
+    customer.rebate = customer.items.reduce((sum, item) => sum + item.rebate, 0);
+    customer.net = customer.items.reduce((sum, item) => sum + item.net, 0);
+    return customer;
+  });
   const root = $("customerSettlementRows");
-  root.innerHTML = rows.length ? rows.map((item) => {
-    const manual = settlementManual[item.name] || {};
-    const actualTotal = settlementManualNumber(manual.total, item.total);
-    const actualWin = settlementManualNumber(manual.win, item.win);
-    const actualRebate = settlementManualNumber(manual.rebate, item.rebate);
-    const actualNet = actualWin + actualRebate - actualTotal;
-    const changed = ["total", "win", "rebate"].some((field) => manual[field] !== undefined && manual[field] !== null && manual[field] !== "");
-    const resultText = actualNet > 0 ? `应付客户 ${money(actualNet)}` : actualNet < 0 ? `客户应付 ${money(Math.abs(actualNet))}` : "本期已结清";
-    const winnersByType = new Map();
-    item.winners.forEach((order) => winnersByType.set(order.type, Number(winnersByType.get(order.type) || 0) + Number(order.winAmount || 0)));
+  root.innerHTML = rows.length ? rows.map((customer) => {
+    const resultText = customer.net > 0 ? `应付客户 ${money(customer.net)}` : customer.net < 0 ? `客户应付 ${money(Math.abs(customer.net))}` : "本期已结清";
     return `
       <details class="customer-settlement-sheet" open>
         <summary>
-          <span><b>${htmlEscape(item.name)}</b><small>${item.count} 笔注单${changed ? " · 已人工修正" : ""}</small></span>
-          <strong class="${actualNet > 0 ? "settlement-pay-customer" : actualNet < 0 ? "settlement-customer-pay" : "ok"}">${resultText}</strong>
+          <span><b>${htmlEscape(customer.name)}</b><small>${customer.items.length} 个原始项目</small></span>
+          <strong class="${customer.net > 0 ? "settlement-pay-customer" : customer.net < 0 ? "settlement-customer-pay" : "ok"}">${resultText}</strong>
         </summary>
         <div class="customer-settlement-body">
           <div class="customer-settlement-metrics">
-            <div><span>投注总额</span><b>${money(actualTotal)}</b></div>
-            <div><span>返水</span><b>${money(actualRebate)}</b></div>
-            <div><span>中奖合计</span><b>${money(actualWin)}</b></div>
-            <div class="settlement-result-metric"><span>最终结算</span><b>${money(actualNet)}</b></div>
+            <div><span>投注总额</span><b>${money(customer.total)}</b></div>
+            <div><span>返水</span><b>${money(customer.rebate)}</b></div>
+            <div><span>中奖合计</span><b>${money(customer.win)}</b></div>
+            <div class="settlement-result-metric"><span>最终结算</span><b>${money(customer.net)}</b></div>
           </div>
-          <div class="settlement-equation">中奖 ${money(actualWin)} + 返水 ${money(actualRebate)} - 投注 ${money(actualTotal)} = ${money(actualNet)}</div>
-          <div class="settlement-direction ${actualNet > 0 ? "pay-customer" : actualNet < 0 ? "customer-pay" : "settled"}">${resultText}</div>
-
-          <details class="settlement-manual-editor">
-            <summary>人工录入 / 修正${changed ? "（已启用）" : ""}</summary>
-            <p>留空使用系统计算；填写后只覆盖本客户对账单，不修改原注单。</p>
-            <div class="settlement-manual-grid">
-              <label>实际投注<input type="number" step="0.01" data-settlement-customer="${htmlEscape(item.name)}" data-settlement-field="total" value="${manual.total ?? ""}" placeholder="自动 ${money(item.total)}" /></label>
-              <label>实际中奖<input type="number" step="0.01" data-settlement-customer="${htmlEscape(item.name)}" data-settlement-field="win" value="${manual.win ?? ""}" placeholder="自动 ${money(item.win)}" /></label>
-              <label>实际返水<input type="number" step="0.01" data-settlement-customer="${htmlEscape(item.name)}" data-settlement-field="rebate" value="${manual.rebate ?? ""}" placeholder="自动 ${money(item.rebate)}" /></label>
-              <label class="settlement-note-field">备注<input type="text" data-settlement-customer="${htmlEscape(item.name)}" data-settlement-field="note" value="${htmlEscape(manual.note || "")}" placeholder="例如：图片人工录入、已核对" /></label>
-            </div>
-            <button type="button" class="plain" data-settlement-reset="${htmlEscape(item.name)}">恢复自动计算</button>
-          </details>
-
-          <details class="settlement-winning-breakdown" open>
-            <summary>中奖构成</summary>
-            ${winnersByType.size ? `<div class="settlement-breakdown-table">${[...winnersByType.entries()].map(([type, amount]) => `<div><span>${htmlEscape(type)}</span><b>${money(amount)}</b></div>`).join("")}</div>` : `<div class="muted-cell">无中奖项目</div>`}
-          </details>
-
-          <details class="settlement-order-details">
-            <summary>查看全部注单明细（${item.count}）</summary>
-            <div class="settlement-orders">
-              ${item.orders.map((order, index) => `
-                <div class="settlement-order-row ${Number(order.winAmount || 0) > 0 ? "winner" : ""}">
-                  <b>${index + 1}. ${htmlEscape(order.region)} ${htmlEscape(order.type)} ${htmlEscape((order.targets || []).join(" "))}</b>
-                  <span>投注 ${money(order.total)} · 赔率 ${money(order.odds)} · ${htmlEscape(order.status || "待开奖")}</span>
-                  <small>中奖 ${money(order.winAmount || 0)} · 返水 ${money(order.rebateAmount ?? rebateAmountFor(order.total, order.rebate))} · 净额 ${money(order.profit || 0)}</small>
-                </div>
-              `).join("")}
-            </div>
-          </details>
-          ${manual.note ? `<div class="settlement-note">备注：${htmlEscape(manual.note)}</div>` : ""}
-          <button type="button" data-copy-settlement="${htmlEscape(item.name)}">复制本客户对账单</button>
+          <div class="settlement-equation">中奖 ${money(customer.win)} + 返水 ${money(customer.rebate)} - 投注 ${money(customer.total)} = ${money(customer.net)}</div>
+          <div class="settlement-source-items">
+            ${customer.items.map((item) => {
+              const changed = ["total", "win", "rebate"].some((field) => item.manual[field] !== undefined && item.manual[field] !== null && item.manual[field] !== "");
+              return `<article class="settlement-source-item">
+                <div class="settlement-source-heading"><b>第${item.displayIndex}项</b><span>${htmlEscape(item.text)}</span>${changed ? "<em>已人工修正</em>" : ""}</div>
+                <div class="settlement-source-totals"><span>投注 <b>${money(item.total)}</b></span><span>中奖 <b>${money(item.win)}</b></span><span>返水 <b>${money(item.rebate)}</b></span><span>净额 <b>${money(item.net)}</b></span></div>
+                <details class="settlement-manual-editor"><summary>人工录入 / 修正</summary><div class="settlement-manual-grid">
+                  <label>实际投注<input type="number" step="0.01" data-source-item="${htmlEscape(item.id)}" data-settlement-field="total" value="${item.manual.total ?? ""}" placeholder="自动 ${money(item.baseTotal)}" /></label>
+                  <label>实际中奖<input type="number" step="0.01" data-source-item="${htmlEscape(item.id)}" data-settlement-field="win" value="${item.manual.win ?? ""}" placeholder="自动 ${money(item.baseWin)}" /></label>
+                  <label>实际返水<input type="number" step="0.01" data-source-item="${htmlEscape(item.id)}" data-settlement-field="rebate" value="${item.manual.rebate ?? ""}" placeholder="自动 ${money(item.baseRebate)}" /></label>
+                  <label class="settlement-note-field">备注<input type="text" data-source-item="${htmlEscape(item.id)}" data-settlement-field="note" value="${htmlEscape(item.manual.note || "")}" /></label>
+                </div><button type="button" class="plain" data-settlement-reset="${htmlEscape(item.id)}">恢复自动计算</button></details>
+                <details class="settlement-order-details"><summary>展开解析明细（${item.orders.length}）</summary><div class="settlement-orders">${item.orders.map((order, index) => `<div class="settlement-order-row ${Number(order.winAmount || 0) > 0 ? "winner" : ""}"><b>${index + 1}. ${htmlEscape(order.region)} ${htmlEscape(order.type)} ${htmlEscape((order.targets || []).join(" "))}</b><span>投注 ${money(order.total)} · 中奖 ${money(order.winAmount || 0)} · 返水 ${money(order.rebateAmount ?? rebateAmountFor(order.total, order.rebate))}</span></div>`).join("")}</div></details>
+                ${item.manual.note ? `<div class="settlement-note">备注：${htmlEscape(item.manual.note)}</div>` : ""}
+              </article>`;
+            }).join("")}
+          </div>
+          <button type="button" data-copy-settlement="${htmlEscape(customer.name)}">复制本客户对账单</button>
         </div>
       </details>
     `;
   }).join("") : `<div class="muted-cell settlement-empty">开奖后按客户汇总结算</div>`;
   root.querySelectorAll("[data-settlement-field]").forEach((input) => {
-    input.addEventListener("change", () => updateCustomerSettlementManual(input.dataset.settlementCustomer, input.dataset.settlementField, input.value));
+    input.addEventListener("change", () => updateSourceItemSettlementManual(input.dataset.sourceItem, input.dataset.settlementField, input.value));
   });
   root.querySelectorAll("[data-settlement-reset]").forEach((button) => {
-    button.addEventListener("click", () => resetCustomerSettlementManual(button.dataset.settlementReset));
+    button.addEventListener("click", () => resetSourceItemSettlementManual(button.dataset.settlementReset));
   });
   root.querySelectorAll("[data-copy-settlement]").forEach((button) => {
     button.addEventListener("click", () => copyCustomerSettlement(button.dataset.copySettlement));
@@ -3608,20 +3662,20 @@ function settlementManualNumber(value, fallback) {
   return Number.isFinite(parsedValue) ? parsedValue : Number(fallback || 0);
 }
 
-function updateCustomerSettlementManual(name, field, value) {
-  const entry = { ...(settlementManual[name] || {}) };
+function updateSourceItemSettlementManual(sourceItemId, field, value) {
+  const entry = { ...(settlementManual[sourceItemId] || {}) };
   if (field === "note") entry.note = String(value || "").trim();
   else if (value === "") delete entry[field];
   else entry[field] = Number(value || 0);
   entry.updatedAt = new Date().toISOString();
-  settlementManual[name] = entry;
+  settlementManual[sourceItemId] = entry;
   safeStorageSet(SETTLEMENT_MANUAL_KEY, JSON.stringify(settlementManual));
   saveDataBackup();
   renderCustomerSettlement();
 }
 
-function resetCustomerSettlementManual(name) {
-  delete settlementManual[name];
+function resetSourceItemSettlementManual(sourceItemId) {
+  delete settlementManual[sourceItemId];
   safeStorageSet(SETTLEMENT_MANUAL_KEY, JSON.stringify(settlementManual));
   saveDataBackup();
   renderCustomerSettlement();
@@ -3629,23 +3683,36 @@ function resetCustomerSettlementManual(name) {
 
 async function copyCustomerSettlement(name) {
   const customerOrders = orders.filter((order) => (order.customerName || "散客") === name);
-  const baseTotal = customerOrders.reduce((sum, order) => sum + Number(order.total || 0), 0);
-  const baseWin = customerOrders.reduce((sum, order) => sum + Number(order.winAmount || 0), 0);
-  const baseRebate = customerOrders.reduce((sum, order) => sum + Number(order.rebateAmount ?? rebateAmountFor(order.total, order.rebate)), 0);
-  const manual = settlementManual[name] || {};
-  const total = settlementManualNumber(manual.total, baseTotal);
-  const win = settlementManualNumber(manual.win, baseWin);
-  const rebate = settlementManualNumber(manual.rebate, baseRebate);
+  const groups = new Map();
+  customerOrders.forEach((order) => {
+    const id = order.sourceItemId || `legacy_${order.id}`;
+    if (!groups.has(id)) groups.set(id, { id, text: order.sourceItemText || order.raw || "原始项目", orders: [] });
+    groups.get(id).orders.push(order);
+  });
+  const items = [...groups.values()].map((item, index) => {
+    const manual = settlementManual[item.id] || {};
+    const baseTotal = item.orders.reduce((sum, order) => sum + Number(order.total || 0), 0);
+    const baseWin = item.orders.reduce((sum, order) => sum + Number(order.winAmount || 0), 0);
+    const baseRebate = item.orders.reduce((sum, order) => sum + Number(order.rebateAmount ?? rebateAmountFor(order.total, order.rebate)), 0);
+    const total = settlementManualNumber(manual.total, baseTotal);
+    const win = settlementManualNumber(manual.win, baseWin);
+    const rebate = settlementManualNumber(manual.rebate, baseRebate);
+    return { ...item, index: index + 1, total, win, rebate, net: win + rebate - total, note: manual.note || "" };
+  });
+  const total = items.reduce((sum, item) => sum + item.total, 0);
+  const win = items.reduce((sum, item) => sum + item.win, 0);
+  const rebate = items.reduce((sum, item) => sum + item.rebate, 0);
   const net = win + rebate - total;
   const result = net > 0 ? `应付客户 ${money(net)}` : net < 0 ? `客户应付 ${money(Math.abs(net))}` : "本期已结清";
   const text = [
     `客户：${name}`,
+    ...items.flatMap((item) => [`第${item.index}项：${item.text}`, `投注 ${money(item.total)}，中奖 ${money(item.win)}，返水 ${money(item.rebate)}，净额 ${money(item.net)}`, item.note ? `备注：${item.note}` : ""]).filter(Boolean),
+    "——客户合计——",
     `投注总额：${money(total)}`,
     `中奖合计：${money(win)}`,
     `返水：${money(rebate)}`,
     `计算：${money(win)} + ${money(rebate)} - ${money(total)} = ${money(net)}`,
-    `结果：${result}`,
-    manual.note ? `备注：${manual.note}` : ""
+    `结果：${result}`
   ].filter(Boolean).join("\n");
   try {
     await navigator.clipboard.writeText(text);

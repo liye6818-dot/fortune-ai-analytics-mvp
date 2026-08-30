@@ -244,6 +244,15 @@ textarea:focus {
   outline: none;
 }
 
+.settlement-source-items { display: grid; gap: 12px; margin: 14px 0; }
+.settlement-source-item { border: 1px solid #d8e0ea; border-radius: 12px; padding: 12px; background: #fff; }
+.settlement-source-heading { display: flex; gap: 8px; align-items: flex-start; flex-wrap: wrap; }
+.settlement-source-heading > span { flex: 1 1 220px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.settlement-source-heading em { color: #a45b00; font-style: normal; font-size: .85em; }
+.settlement-source-totals { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
+.settlement-source-totals span { padding: 8px; border-radius: 8px; background: #f5f8fc; }
+@media (max-width: 680px) { .settlement-source-totals { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
 .app-header h1 small { font-size: 13px; color: #fff3a8; }
 .remember-correction, .learning-master-switch { display: inline-flex; align-items: center; gap: 8px; font-weight: 800; }
 .remember-correction input, .learning-master-switch input { width: 18px; height: 18px; }
