@@ -11,6 +11,7 @@ const LICENSE_SESSION_KEY = "fortune_ai_analytics_mvp_access_code_v3";
 const DEVICE_KEY = "fortune_ai_analytics_mvp_device";
 const DATA_BACKUP_KEY = "fortune_ai_analytics_mvp_backup";
 const AI_EXAMPLES_KEY = "fortune_ai_analytics_mvp_ai_examples_v1";
+const SETTLEMENT_MANUAL_KEY = "fortune_customer_settlement_manual_v1";
 const LEARNING_SETTINGS_KEY = "fortune_parser_learning_settings_single_v1";
 const LEARNING_CASES_KEY = "fortune_parser_learning_cases_single_v1";
 const LEARNING_RULES_KEY = "fortune_parser_learning_rules_single_v1";
@@ -105,6 +106,7 @@ let adjustments = loadJson(ADJUST_STORAGE_KEY, {});
 let reported = loadJson(REPORTED_STORAGE_KEY, {});
 let riskSettings = normalizeRiskSettings(loadJson(RISK_SETTINGS_KEY, { limitByRegion: { 澳门: 0, 香港: 0 } }));
 let customers = loadJson(CUSTOMER_KEY, [{ id: "default", name: "散客", odds: 47, oddsByType: { ...defaultOdds }, rebateByType: {}, rebate: 0 }]);
+let settlementManual = loadJson(SETTLEMENT_MANUAL_KEY, {});
 let accessSession = null;
 let heartbeatTimer = null;
 let reportCopySnapshot = loadJson(REPORT_PENDING_KEY, null);
@@ -391,6 +393,7 @@ function saveDataBackup() {
     [REPORTED_STORAGE_KEY]: reported,
     [RISK_SETTINGS_KEY]: riskSettings,
     [CUSTOMER_KEY]: customers,
+    [SETTLEMENT_MANUAL_KEY]: settlementManual,
     [AI_EXAMPLES_KEY]: loadAiExamples(),
     savedAt: new Date().toISOString()
   }));
@@ -745,6 +748,7 @@ function saveAll() {
   safeStorageSet(REPORTED_STORAGE_KEY, JSON.stringify(reported));
   safeStorageSet(RISK_SETTINGS_KEY, JSON.stringify(riskSettings));
   safeStorageSet(CUSTOMER_KEY, JSON.stringify(customers));
+  safeStorageSet(SETTLEMENT_MANUAL_KEY, JSON.stringify(settlementManual));
   saveDataBackup();
   $("lastSaved").textContent = "注单仅本机保存";
 }
@@ -3525,42 +3529,130 @@ function renderCustomerSettlement() {
     item.orders.push(order);
   });
   const rows = [...grouped.values()].sort((a, b) => a.net - b.net || b.total - a.total);
-  $("customerSettlementRows").innerHTML = rows.length ? rows.map((item) => `
-    <tr>
-      <td class="settlement-customer-cell">
-        <details open>
-          <summary>${htmlEscape(item.name)}</summary>
-          <div class="settlement-detail">
-            <div class="settlement-formula">
-              金额 ${money(item.total)} - 返水 ${money(item.rebate)} - 中奖 ${money(item.win)} = ${money(item.total - item.rebate - item.win)}
+  const root = $("customerSettlementRows");
+  root.innerHTML = rows.length ? rows.map((item) => {
+    const manual = settlementManual[item.name] || {};
+    const actualTotal = settlementManualNumber(manual.total, item.total);
+    const actualWin = settlementManualNumber(manual.win, item.win);
+    const actualRebate = settlementManualNumber(manual.rebate, item.rebate);
+    const actualNet = actualWin + actualRebate - actualTotal;
+    const changed = ["total", "win", "rebate"].some((field) => manual[field] !== undefined && manual[field] !== null && manual[field] !== "");
+    const resultText = actualNet > 0 ? `应付客户 ${money(actualNet)}` : actualNet < 0 ? `客户应付 ${money(Math.abs(actualNet))}` : "本期已结清";
+    const winnersByType = new Map();
+    item.winners.forEach((order) => winnersByType.set(order.type, Number(winnersByType.get(order.type) || 0) + Number(order.winAmount || 0)));
+    return `
+      <details class="customer-settlement-sheet" open>
+        <summary>
+          <span><b>${htmlEscape(item.name)}</b><small>${item.count} 笔注单${changed ? " · 已人工修正" : ""}</small></span>
+          <strong class="${actualNet > 0 ? "settlement-pay-customer" : actualNet < 0 ? "settlement-customer-pay" : "ok"}">${resultText}</strong>
+        </summary>
+        <div class="customer-settlement-body">
+          <div class="customer-settlement-metrics">
+            <div><span>投注总额</span><b>${money(actualTotal)}</b></div>
+            <div><span>返水</span><b>${money(actualRebate)}</b></div>
+            <div><span>中奖合计</span><b>${money(actualWin)}</b></div>
+            <div class="settlement-result-metric"><span>最终结算</span><b>${money(actualNet)}</b></div>
+          </div>
+          <div class="settlement-equation">中奖 ${money(actualWin)} + 返水 ${money(actualRebate)} - 投注 ${money(actualTotal)} = ${money(actualNet)}</div>
+          <div class="settlement-direction ${actualNet > 0 ? "pay-customer" : actualNet < 0 ? "customer-pay" : "settled"}">${resultText}</div>
+
+          <details class="settlement-manual-editor">
+            <summary>人工录入 / 修正${changed ? "（已启用）" : ""}</summary>
+            <p>留空使用系统计算；填写后只覆盖本客户对账单，不修改原注单。</p>
+            <div class="settlement-manual-grid">
+              <label>实际投注<input type="number" step="0.01" data-settlement-customer="${htmlEscape(item.name)}" data-settlement-field="total" value="${manual.total ?? ""}" placeholder="自动 ${money(item.total)}" /></label>
+              <label>实际中奖<input type="number" step="0.01" data-settlement-customer="${htmlEscape(item.name)}" data-settlement-field="win" value="${manual.win ?? ""}" placeholder="自动 ${money(item.win)}" /></label>
+              <label>实际返水<input type="number" step="0.01" data-settlement-customer="${htmlEscape(item.name)}" data-settlement-field="rebate" value="${manual.rebate ?? ""}" placeholder="自动 ${money(item.rebate)}" /></label>
+              <label class="settlement-note-field">备注<input type="text" data-settlement-customer="${htmlEscape(item.name)}" data-settlement-field="note" value="${htmlEscape(manual.note || "")}" placeholder="例如：图片人工录入、已核对" /></label>
             </div>
+            <button type="button" class="plain" data-settlement-reset="${htmlEscape(item.name)}">恢复自动计算</button>
+          </details>
+
+          <details class="settlement-winning-breakdown" open>
+            <summary>中奖构成</summary>
+            ${winnersByType.size ? `<div class="settlement-breakdown-table">${[...winnersByType.entries()].map(([type, amount]) => `<div><span>${htmlEscape(type)}</span><b>${money(amount)}</b></div>`).join("")}</div>` : `<div class="muted-cell">无中奖项目</div>`}
+          </details>
+
+          <details class="settlement-order-details">
+            <summary>查看全部注单明细（${item.count}）</summary>
             <div class="settlement-orders">
-              ${item.orders.map((order) => `
+              ${item.orders.map((order, index) => `
                 <div class="settlement-order-row ${Number(order.winAmount || 0) > 0 ? "winner" : ""}">
-                  <b>${htmlEscape(order.region)} ${htmlEscape(order.type)} ${htmlEscape((order.targets || []).join(" "))}</b>
-                  <span>金额 ${money(order.amount)}，总额 ${money(order.total)}，赔率 ${money(order.odds)}</span>
-                  <small>状态 ${htmlEscape(order.status || "待开奖")}，中奖 ${money(order.winAmount || 0)}，返水 ${money(order.rebateAmount ?? rebateAmountFor(order.total, order.rebate))}，净 ${money(order.profit || 0)}</small>
-                  <small>${new Date(order.createdAt).toLocaleString()}</small>
+                  <b>${index + 1}. ${htmlEscape(order.region)} ${htmlEscape(order.type)} ${htmlEscape((order.targets || []).join(" "))}</b>
+                  <span>投注 ${money(order.total)} · 赔率 ${money(order.odds)} · ${htmlEscape(order.status || "待开奖")}</span>
+                  <small>中奖 ${money(order.winAmount || 0)} · 返水 ${money(order.rebateAmount ?? rebateAmountFor(order.total, order.rebate))} · 净额 ${money(order.profit || 0)}</small>
                 </div>
               `).join("")}
             </div>
-            ${item.winners.length ? `
-              <div class="settlement-winners">
-                ${item.winners.map((order) => `
-                  <div>${htmlEscape(order.type)} ${htmlEscape((order.targets || []).join(" "))}，中 ${money(order.winAmount || 0)}</div>
-                `).join("")}
-              </div>
-            ` : `<div class="settlement-winners muted-cell">无中奖项目</div>`}
-          </div>
-        </details>
-      </td>
-      <td>${item.count}</td>
-      <td>${money(item.total)}</td>
-      <td>${money(item.win)}</td>
-      <td>${money(item.rebate)}</td>
-      <td class="${item.net >= 0 ? "bad" : "ok"}">${money(item.net)}</td>
-    </tr>
-  `).join("") : `<tr><td colspan="6" class="muted-cell">开奖后按客户汇总结算</td></tr>`;
+          </details>
+          ${manual.note ? `<div class="settlement-note">备注：${htmlEscape(manual.note)}</div>` : ""}
+          <button type="button" data-copy-settlement="${htmlEscape(item.name)}">复制本客户对账单</button>
+        </div>
+      </details>
+    `;
+  }).join("") : `<div class="muted-cell settlement-empty">开奖后按客户汇总结算</div>`;
+  root.querySelectorAll("[data-settlement-field]").forEach((input) => {
+    input.addEventListener("change", () => updateCustomerSettlementManual(input.dataset.settlementCustomer, input.dataset.settlementField, input.value));
+  });
+  root.querySelectorAll("[data-settlement-reset]").forEach((button) => {
+    button.addEventListener("click", () => resetCustomerSettlementManual(button.dataset.settlementReset));
+  });
+  root.querySelectorAll("[data-copy-settlement]").forEach((button) => {
+    button.addEventListener("click", () => copyCustomerSettlement(button.dataset.copySettlement));
+  });
+}
+
+function settlementManualNumber(value, fallback) {
+  if (value === undefined || value === null || value === "") return Number(fallback || 0);
+  const parsedValue = Number(value);
+  return Number.isFinite(parsedValue) ? parsedValue : Number(fallback || 0);
+}
+
+function updateCustomerSettlementManual(name, field, value) {
+  const entry = { ...(settlementManual[name] || {}) };
+  if (field === "note") entry.note = String(value || "").trim();
+  else if (value === "") delete entry[field];
+  else entry[field] = Number(value || 0);
+  entry.updatedAt = new Date().toISOString();
+  settlementManual[name] = entry;
+  safeStorageSet(SETTLEMENT_MANUAL_KEY, JSON.stringify(settlementManual));
+  saveDataBackup();
+  renderCustomerSettlement();
+}
+
+function resetCustomerSettlementManual(name) {
+  delete settlementManual[name];
+  safeStorageSet(SETTLEMENT_MANUAL_KEY, JSON.stringify(settlementManual));
+  saveDataBackup();
+  renderCustomerSettlement();
+}
+
+async function copyCustomerSettlement(name) {
+  const customerOrders = orders.filter((order) => (order.customerName || "散客") === name);
+  const baseTotal = customerOrders.reduce((sum, order) => sum + Number(order.total || 0), 0);
+  const baseWin = customerOrders.reduce((sum, order) => sum + Number(order.winAmount || 0), 0);
+  const baseRebate = customerOrders.reduce((sum, order) => sum + Number(order.rebateAmount ?? rebateAmountFor(order.total, order.rebate)), 0);
+  const manual = settlementManual[name] || {};
+  const total = settlementManualNumber(manual.total, baseTotal);
+  const win = settlementManualNumber(manual.win, baseWin);
+  const rebate = settlementManualNumber(manual.rebate, baseRebate);
+  const net = win + rebate - total;
+  const result = net > 0 ? `应付客户 ${money(net)}` : net < 0 ? `客户应付 ${money(Math.abs(net))}` : "本期已结清";
+  const text = [
+    `客户：${name}`,
+    `投注总额：${money(total)}`,
+    `中奖合计：${money(win)}`,
+    `返水：${money(rebate)}`,
+    `计算：${money(win)} + ${money(rebate)} - ${money(total)} = ${money(net)}`,
+    `结果：${result}`,
+    manual.note ? `备注：${manual.note}` : ""
+  ].filter(Boolean).join("\n");
+  try {
+    await navigator.clipboard.writeText(text);
+    alert("客户对账单已复制");
+  } catch {
+    alert(text);
+  }
 }
 
 function reportSettlementSummary(region) {

@@ -28,7 +28,7 @@
     <link rel="apple-touch-startup-image" href="./splash/splash-1290x2796.png?v=20260703_pwa_1" media="(device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3)" />
     <link rel="apple-touch-startup-image" href="./splash/splash-1536x2048.png?v=20260703_pwa_1" media="(device-width: 768px) and (device-height: 1024px) and (-webkit-device-pixel-ratio: 2)" />
     <link rel="apple-touch-startup-image" href="./splash/splash-2048x2732.png?v=20260703_pwa_1" media="(device-width: 1024px) and (device-height: 1366px) and (-webkit-device-pixel-ratio: 2)" />
-    <link rel="stylesheet" href="./styles.css?v=20260715_settlement_report11" />
+    <link rel="stylesheet" href="./styles.css?v=20260830_customer_settlement_1" />
     <style>
       @media (max-width: 640px) {
         .orders-table th:nth-child(11),
@@ -403,28 +403,14 @@
             <div><b id="settlementReportWin">0</b><span>上报中奖</span></div>
             <div><b id="settlementReportNet">0</b><span>上报盈亏</span></div>
           </div>
-          <div class="table-wrap settlement-table">
-            <table>
-              <thead>
-                <tr>
-                  <th>客户</th>
-                  <th>注单数</th>
-                  <th>总金额</th>
-                  <th>中奖</th>
-                  <th>返水</th>
-                  <th>净结算</th>
-                </tr>
-              </thead>
-              <tbody id="customerSettlementRows"></tbody>
-            </table>
-          </div>
+          <div id="customerSettlementRows" class="customer-settlement-sheets"></div>
         </details>
       </section>
 
     </main>
 
     <script src="./config.js?v=20260709_order_type_clean"></script>
-    <script src="./app.js?v=20260830_learning_single_1"></script>
-    <script src="./pwa.js?v=20260830_learning_single_1"></script>
+    <script src="./app.js?v=20260830_customer_settlement_1"></script>
+    <script src="./pwa.js?v=20260830_customer_settlement_1"></script>
   </body>
 </html>

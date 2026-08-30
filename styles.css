@@ -912,6 +912,130 @@ label {
   overflow-wrap: anywhere;
 }
 
+.customer-settlement-sheets {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.customer-settlement-sheet {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.05);
+}
+
+.customer-settlement-sheet > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  cursor: pointer;
+  background: #f8fafc;
+  list-style: none;
+}
+
+.customer-settlement-sheet > summary::-webkit-details-marker { display: none; }
+.customer-settlement-sheet > summary span { display: grid; gap: 2px; }
+.customer-settlement-sheet > summary b { font-size: 18px; }
+.customer-settlement-sheet > summary small { color: var(--muted); }
+.customer-settlement-sheet > summary strong { font-size: 17px; text-align: right; }
+.settlement-pay-customer { color: #c62828; }
+.settlement-customer-pay { color: #087f5b; }
+
+.customer-settlement-body {
+  display: grid;
+  gap: 12px;
+  padding: 14px 16px 16px;
+}
+
+.customer-settlement-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.customer-settlement-metrics > div {
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  border: 1px solid #dbe4f0;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.customer-settlement-metrics span { color: var(--muted); font-size: 13px; }
+.customer-settlement-metrics b { font-size: 19px; }
+.settlement-result-metric { background: #fff8db !important; border-color: #f1d46a !important; }
+
+.settlement-equation {
+  padding: 10px 12px;
+  border-radius: 9px;
+  background: #f1f5f9;
+  font-weight: 700;
+  text-align: center;
+}
+
+.settlement-direction {
+  padding: 12px;
+  border: 2px solid;
+  border-radius: 10px;
+  font-size: 21px;
+  font-weight: 800;
+  text-align: center;
+}
+.settlement-direction.pay-customer { color: #b42318; border-color: #f5b7b1; background: #fff1f0; }
+.settlement-direction.customer-pay { color: #087f5b; border-color: #9bd8c2; background: #ecfdf5; }
+.settlement-direction.settled { color: #475569; border-color: #cbd5e1; background: #f8fafc; }
+
+.settlement-manual-editor,
+.settlement-winning-breakdown,
+.settlement-order-details {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+}
+
+.settlement-manual-editor > summary,
+.settlement-winning-breakdown > summary,
+.settlement-order-details > summary {
+  padding: 10px 12px;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.settlement-manual-editor > p { margin: 0; padding: 0 12px 8px; color: var(--muted); font-size: 13px; }
+.settlement-manual-editor > button { margin: 0 12px 12px; }
+.settlement-manual-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  padding: 0 12px 10px;
+}
+.settlement-manual-grid label { display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
+.settlement-manual-grid input { width: 100%; min-width: 0; }
+.settlement-note-field { grid-column: 1 / -1; }
+
+.settlement-breakdown-table { display: grid; padding: 0 12px 10px; }
+.settlement-breakdown-table > div { display: flex; justify-content: space-between; padding: 8px 0; border-top: 1px solid #edf2f7; }
+.settlement-breakdown-table b { color: #b42318; }
+.settlement-note { padding: 9px 11px; border-radius: 8px; background: #fff8db; }
+.settlement-empty { padding: 24px; text-align: center; }
+
+@media (max-width: 640px) {
+  .customer-settlement-sheet > summary { align-items: flex-start; padding: 12px; }
+  .customer-settlement-sheet > summary b { font-size: 16px; }
+  .customer-settlement-sheet > summary strong { max-width: 48%; font-size: 15px; }
+  .customer-settlement-body { padding: 10px; }
+  .customer-settlement-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .customer-settlement-metrics b { font-size: 17px; }
+  .settlement-direction { font-size: 19px; }
+  .settlement-manual-grid { grid-template-columns: 1fr; }
+  .settlement-note-field { grid-column: auto; }
+}
+
 .parsed-mobile-controls {
   display: none;
 }
