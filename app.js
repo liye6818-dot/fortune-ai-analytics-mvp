@@ -11,6 +11,14 @@ const LICENSE_SESSION_KEY = "fortune_ai_analytics_mvp_access_code_v3";
 const DEVICE_KEY = "fortune_ai_analytics_mvp_device";
 const DATA_BACKUP_KEY = "fortune_ai_analytics_mvp_backup";
 const AI_EXAMPLES_KEY = "fortune_ai_analytics_mvp_ai_examples_v1";
+const LEARNING_SETTINGS_KEY = "fortune_parser_learning_settings_single_v1";
+const LEARNING_CASES_KEY = "fortune_parser_learning_cases_single_v1";
+const LEARNING_RULES_KEY = "fortune_parser_learning_rules_single_v1";
+const LEARNING_CONFLICTS_KEY = "fortune_parser_learning_conflicts_single_v1";
+const LEARNING_REMOTE_SETTINGS_KEY = "fortune_parser_learning_remote_settings_single_v1";
+const LEARNING_REMOTE_PACKAGE_KEY = "fortune_parser_learning_remote_package_single_v1";
+const DEFAULT_LEARNING_PACKAGE_URL = "https://caishenye88.com/parser-learning/test.json";
+const LOCAL_TEST_BYPASS_LICENSE = false;
 const APP_CONFIG = window.APP_CONFIG || {};
 const MACAU_DRAW_API = APP_CONFIG.MACAU_DRAW_API || "";
 const HONGKONG_DRAW_API = APP_CONFIG.HONGKONG_DRAW_API || "";
@@ -101,6 +109,17 @@ let accessSession = null;
 let heartbeatTimer = null;
 let reportCopySnapshot = loadJson(REPORT_PENDING_KEY, null);
 let reportReminderArmed = false;
+let learningSnapshot = null;
+let learningAppliedCaseId = null;
+let learningLastDecision = {
+  hit: false,
+  caseId: null,
+  matchType: "none",
+  score: 0,
+  finalSource: "original_parser",
+  reason: "not_checked",
+  normalizedText: ""
+};
 
 const $ = (id) => document.getElementById(id);
 
@@ -268,6 +287,12 @@ async function activateLicense() {
 }
 
 function initLicenseGate() {
+  if (LOCAL_TEST_BYPASS_LICENSE) {
+    setAppLocked(false);
+    accessSession = null;
+    if ($("lastSaved")) $("lastSaved").textContent = "本地测试免访问码";
+    return;
+  }
   const remember = $("rememberLicense");
   if (remember) {
     remember.checked = true;
@@ -1767,15 +1792,37 @@ function refreshParsedOrder(index) {
   order.warnings = validateParsedOrder(order);
 }
 
-function parseOrders() {
+function parseOrders(learningSourceText = null) {
   const context = parseInputContext($("orderInput").value);
+  const learningSource = typeof learningSourceText === "string" ? learningSourceText : $("orderInput").value;
   applyParseContextToControls(context);
   parsed = parseInputText(context.text, context.region, $("defaultType")?.value || "特码")
     .flatMap(expandZodiacComboOrder)
     .flatMap(expandMainZodiacSingles)
     .map((order) => applyCustomerDefaults(order, context.customer));
+  learningSnapshot = {
+    sourceText: learningSource,
+    originalResult: learningOrdersValue(parsed),
+    createdAt: new Date().toISOString()
+  };
+  learningAppliedCaseId = null;
+  learningLastDecision = {
+    hit: false,
+    caseId: null,
+    matchType: "none",
+    score: 0,
+    finalSource: "original_parser",
+    reason: learningSettings().enabled ? "no_match" : "learning_disabled",
+    normalizedText: normalizeLearningText(learningSource)
+  };
+  parsed = applyMixedEachNumberRule(learningSource, parsed);
+  if (!learningAppliedCaseId) parsed = applyEachNumberXRule(learningSource, parsed);
+  if (!learningAppliedCaseId) parsed = applyZodiacGroupedLearningRule(learningSource, parsed);
+  if (!learningAppliedCaseId) parsed = applyExactLearningCase(learningSource, parsed);
+  if (!learningAppliedCaseId && learningLastDecision.caseId !== "builtin-each-number-x-v1") parsed = applyConfirmedAdditionRules(learningSource, parsed);
   renderParsed();
   renderDeferred();
+  renderLearningEntryStatus();
 }
 
 function populateDefaultTypeSelect() {
@@ -1795,6 +1842,625 @@ function scheduleParseOrders() {
 function setOcrStatus(text) {
   const status = $("ocrStatus");
   if (status) status.textContent = text || "";
+}
+
+function learningSettings() {
+  return loadJson(LEARNING_SETTINGS_KEY, { enabled: false });
+}
+
+function learningCases() {
+  const local = loadJson(LEARNING_CASES_KEY, []);
+  const remote = loadJson(LEARNING_REMOTE_PACKAGE_KEY, null)?.cases || [];
+  return [...local, ...remote.filter((remoteItem) => !local.some((localItem) => localItem.id === remoteItem.id))];
+}
+
+function learningRules() {
+  const local = loadJson(LEARNING_RULES_KEY, []);
+  const remote = loadJson(LEARNING_REMOTE_PACKAGE_KEY, null)?.rules || [];
+  return [...local, ...remote.filter((remoteItem) => !local.some((localItem) => localItem.id === remoteItem.id))];
+}
+
+function localLearningCases() {
+  return loadJson(LEARNING_CASES_KEY, []);
+}
+
+function localLearningRules() {
+  return loadJson(LEARNING_RULES_KEY, []);
+}
+
+function learningConflicts() {
+  return loadJson(LEARNING_CONFLICTS_KEY, []);
+}
+
+function saveLearningValue(key, value) {
+  safeStorageSet(key, JSON.stringify(value));
+}
+
+function normalizeLearningText(value) {
+  return String(value || "")
+    .replace(/[Ⅹⅹ×＊*]/g, "x")
+    .normalize("NFKC")
+    .replace(/香港/g, "港")
+    .replace(/澳门/g, "澳")
+    .replace(/[，、；;]+/g, " ")
+    .replace(/[.。．]+/g, " ")
+    .replace(/(\d)\s*x\s*(?=\d)/gi, "$1各")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
+function learningNumberTokens(value) {
+  return [...normalizeLearningExpression(value).matchAll(/\d+(?:\.\d+)?/g)].map((match) => match[0]);
+}
+
+function learningTextPattern(value) {
+  return normalizeLearningExpression(value).replace(/\d+(?:\.\d+)?/g, "{数字}");
+}
+
+function normalizeLearningExpression(value) {
+  return normalizeLearningText(value)
+    .replace(/(?:特码)?特单数?/g, "单数")
+    .replace(/单个数|单数个/g, "单数各")
+    .replace(/(\d+(?:\.\d+)?)\s*(?:元|块|米)?\s*(?:一个数|每个数|每数|各数|各号|各个)/g, "各$1")
+    .replace(/(?:一个数|每个数|每数|各数|各号|各个|各)\s*(\d+(?:\.\d+)?)(?:\s*(?:元|块|米))?/g, "各$1")
+    .replace(/单数各各/g, "单数各")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function learningSemanticSignature(value) {
+  const text = normalizeLearningExpression(value);
+  const groups = [
+    ["单数", "双数"],
+    ["大数", "小数", "大", "小"],
+    ["特码", "平码"],
+    ["澳门", "澳", "香港", "港"],
+    ["红波", "蓝波", "绿波"],
+    ["生肖", "尾数", "号码"]
+  ];
+  return groups.map((group) => group.find((word) => text.includes(word)) || "").join("|");
+}
+
+function learningEditDistance(left, right) {
+  const a = [...String(left || "")];
+  const b = [...String(right || "")];
+  const row = Array.from({ length: b.length + 1 }, (_, index) => index);
+  for (let i = 1; i <= a.length; i += 1) {
+    let previous = row[0];
+    row[0] = i;
+    for (let j = 1; j <= b.length; j += 1) {
+      const saved = row[j];
+      row[j] = Math.min(row[j] + 1, row[j - 1] + 1, previous + (a[i - 1] === b[j - 1] ? 0 : 1));
+      previous = saved;
+    }
+  }
+  return row[b.length];
+}
+
+function fuzzyLearningCase(cases, sourceText) {
+  const inputPattern = learningTextPattern(sourceText);
+  const inputSignature = learningSemanticSignature(sourceText);
+  const inputTokenCount = learningNumberTokens(sourceText).length;
+  const ranked = cases
+    .filter((item) => item.enabled !== false)
+    .map((item) => {
+      const template = effectiveLearningTemplate(item);
+      const distance = learningEditDistance(template.pattern, inputPattern);
+      const length = Math.max(template.pattern.length, inputPattern.length, 1);
+      return { item, template, distance, similarity: 1 - distance / length };
+    })
+    .filter((candidate) => candidate.template.tokenCount === inputTokenCount)
+    .filter((candidate) => learningSemanticSignature(candidate.item.sourceText) === inputSignature)
+    .filter((candidate) => candidate.distance <= 1 || candidate.similarity >= 0.9)
+    .sort((left, right) => left.distance - right.distance || right.similarity - left.similarity);
+  if (!ranked.length) return null;
+  if (ranked[1] && ranked[0].distance === ranked[1].distance && learningTemplateSignature(ranked[0].item) !== learningTemplateSignature(ranked[1].item)) return null;
+  return ranked[0];
+}
+
+function numericTokenIndex(tokens, value, preferLast = false, startAt = 0, excluded = null) {
+  const wanted = Number(value);
+  const indexes = tokens.map((token, index) => index >= startAt && !excluded?.has(index) && Number(token) === wanted ? index : -1).filter((index) => index >= 0);
+  if (!indexes.length) return -1;
+  return preferLast ? indexes[indexes.length - 1] : indexes[0];
+}
+
+function buildLearningTemplate(sourceText, correctedResult) {
+  const expression = normalizeLearningExpression(sourceText);
+  const tokenMatches = [...expression.matchAll(/\d+(?:\.\d+)?/g)];
+  const tokens = tokenMatches.map((match) => match[0]);
+  const markedAmountIndexes = new Set(tokenMatches.map((match, index) => /各\s*$/.test(expression.slice(0, match.index)) ? index : -1).filter((index) => index >= 0));
+  let tokenCursor = 0;
+  return {
+    templateVersion: 3,
+    pattern: learningTextPattern(sourceText),
+    tokenCount: tokens.length,
+    orders: correctedResult.map((order) => {
+      const targets = (order.targets || []).map((target) => {
+        let index = /^\d+(?:\.\d+)?$/.test(String(target)) ? numericTokenIndex(tokens, target, false, tokenCursor, markedAmountIndexes) : -1;
+        if (index < 0 && /^\d+(?:\.\d+)?$/.test(String(target))) index = numericTokenIndex(tokens, target, false, 0, markedAmountIndexes);
+        if (index >= 0) tokenCursor = index + 1;
+        return index >= 0 ? { tokenIndex: index, pad: String(target).length } : { value: target };
+      });
+      let amountTokenIndex = numericTokenIndex(tokens, order.amount, false, tokenCursor, new Set(tokens.map((_, index) => markedAmountIndexes.has(index) ? -1 : index).filter((index) => index >= 0)));
+      if (amountTokenIndex < 0) amountTokenIndex = numericTokenIndex(tokens, order.amount, false, tokenCursor);
+      if (amountTokenIndex < 0) amountTokenIndex = numericTokenIndex(tokens, order.amount, true);
+      if (amountTokenIndex >= 0) tokenCursor = amountTokenIndex + 1;
+      return {
+        region: order.region,
+        type: order.type,
+        targets,
+        amountTokenIndex,
+        amountValue: Number(order.amount || 0)
+      };
+    })
+  };
+}
+
+function effectiveLearningTemplate(item) {
+  if (item.template?.templateVersion === 3) return item.template;
+  return buildLearningTemplate(item.sourceText, item.correctedResult || []);
+}
+
+function learningTemplateSignature(item) {
+  const template = effectiveLearningTemplate(item);
+  return JSON.stringify(template.orders.map((order) => ({
+    region: order.region,
+    type: order.type,
+    targets: order.targets,
+    amountTokenIndex: order.amountTokenIndex,
+    amountValue: order.amountTokenIndex >= 0 ? "{数字}" : order.amountValue
+  })));
+}
+
+function materializeLearningTemplate(item, sourceText, allowPatternMismatch = false) {
+  const template = effectiveLearningTemplate(item);
+  const tokens = learningNumberTokens(sourceText);
+  if ((!allowPatternMismatch && template.pattern !== learningTextPattern(sourceText)) || template.tokenCount !== tokens.length) return null;
+  const customer = currentCustomer();
+  return template.orders.map((definition) => {
+    const targets = definition.targets.map((target) => {
+      if (target.tokenIndex == null) return target.value;
+      const token = tokens[target.tokenIndex];
+      if (token == null) return target.value || "";
+      return target.pad > 1 ? String(Number(token)).padStart(target.pad, "0") : String(Number(token));
+    });
+    const amount = definition.amountTokenIndex >= 0 && tokens[definition.amountTokenIndex] != null
+      ? Number(tokens[definition.amountTokenIndex])
+      : Number(definition.amountValue || 0);
+    return applyCustomerDefaults(makeOrder({ raw: sourceText, region: definition.region, type: definition.type, targets, amount }), customer);
+  });
+}
+
+function repeatedNumberAmountLearningMatch(cases, sourceText) {
+  const pairPattern = "{数字}号{数字}";
+  const inputPattern = learningTextPattern(sourceText);
+  const inputParts = inputPattern.split(/\s+/).filter(Boolean);
+  if (!inputParts.length || inputParts.some((part) => part !== pairPattern)) return null;
+  const tokens = learningNumberTokens(sourceText);
+  if (tokens.length !== inputParts.length * 2) return null;
+  const candidates = cases.filter((item) => {
+    if (item.enabled === false) return false;
+    const template = effectiveLearningTemplate(item);
+    const parts = template.pattern.split(/\s+/).filter(Boolean);
+    if (parts.length < 2 || parts.some((part) => part !== pairPattern)) return false;
+    if (template.orders.length !== parts.length || template.tokenCount !== parts.length * 2) return false;
+    return template.orders.every((order, index) => order.targets?.length === 1
+      && order.targets[0]?.tokenIndex === index * 2
+      && order.amountTokenIndex === index * 2 + 1);
+  });
+  if (!candidates.length) return null;
+  const signatures = [...new Set(candidates.map((item) => {
+    const first = effectiveLearningTemplate(item).orders[0];
+    return JSON.stringify({ region: first.region, type: first.type, pad: first.targets[0]?.pad || 2 });
+  }))];
+  if (signatures.length !== 1) return null;
+  const item = candidates.sort((left, right) => effectiveLearningTemplate(right).orders.length - effectiveLearningTemplate(left).orders.length)[0];
+  const prototype = effectiveLearningTemplate(item).orders[0];
+  const customer = currentCustomer();
+  const orders = inputParts.map((_, index) => applyCustomerDefaults(makeOrder({
+    raw: sourceText,
+    region: prototype.region,
+    type: prototype.type,
+    targets: [String(Number(tokens[index * 2])).padStart(prototype.targets[0]?.pad || 2, "0")],
+    amount: Number(tokens[index * 2 + 1])
+  }), customer));
+  return { item, orders };
+}
+
+function learningOrderValue(order) {
+  return {
+    region: order.region || "",
+    type: order.type || "",
+    targets: Array.isArray(order.targets) ? order.targets.map(String) : [],
+    amount: Number(order.amount || 0),
+    odds: Number(order.odds || 0)
+  };
+}
+
+function learningOrdersValue(items) {
+  return (items || []).map(learningOrderValue);
+}
+
+function learningFingerprint(items) {
+  return JSON.stringify(learningOrdersValue(items));
+}
+
+function learningStructuralFingerprint(items) {
+  return JSON.stringify((items || []).map((order) => ({
+    region: order.region || "",
+    type: order.type || "",
+    targets: Array.isArray(order.targets) ? order.targets.map(String) : [],
+    amount: Number(order.amount || 0)
+  })));
+}
+
+function learningChangedFields(before, after) {
+  const fields = [];
+  const length = Math.max(before.length, after.length);
+  for (let index = 0; index < length; index += 1) {
+    const left = before[index];
+    const right = after[index];
+    if (!left) { fields.push({ row: index, field: "row", change: "added" }); continue; }
+    if (!right) { fields.push({ row: index, field: "row", change: "deleted" }); continue; }
+    ["region", "type", "targets", "amount", "odds"].forEach((field) => {
+      if (JSON.stringify(left[field]) !== JSON.stringify(right[field])) {
+        fields.push({ row: index, field, before: left[field], after: right[field] });
+      }
+    });
+  }
+  return fields;
+}
+
+function recordLearningConflict(kind, sourceText, detail) {
+  const items = learningConflicts();
+  items.unshift({ id: makeId(), kind, sourceText, detail, createdAt: new Date().toISOString(), resolved: false });
+  saveLearningValue(LEARNING_CONFLICTS_KEY, items.slice(0, 200));
+}
+
+function persistLearningCaseUsage(item) {
+  if (item.origin === "remote") {
+    const packageValue = loadJson(LEARNING_REMOTE_PACKAGE_KEY, null);
+    if (!packageValue) return;
+    packageValue.cases = (packageValue.cases || []).map((entry) => entry.id === item.id ? item : entry);
+    saveLearningValue(LEARNING_REMOTE_PACKAGE_KEY, packageValue);
+    return;
+  }
+  saveLearningValue(LEARNING_CASES_KEY, [item, ...localLearningCases().filter((entry) => entry.id !== item.id)]);
+}
+
+function additionRuleCandidate(sourceText, changes, caseId) {
+  const match = normalizeLearningText(sourceText).match(/([鼠牛虎兔龙蛇马羊猴鸡狗猪])\s*(再加|加|\+)\s*(\d+(?:\.\d+)?)/);
+  if (!match || !changes.some((item) => item.field === "amount" || item.change === "deleted")) return null;
+  return {
+    id: makeId(),
+    name: "对象 + 加/再加/+ + 金额 → 追加金额",
+    kind: "append_amount",
+    status: "pending",
+    enabled: false,
+    sourceCaseIds: [caseId],
+    hitCount: 0,
+    lastUsedAt: null,
+    createdAt: new Date().toISOString()
+  };
+}
+
+function saveLearningCase() {
+  if (!learningSnapshot) return false;
+  const corrected = learningOrdersValue(parsed);
+  const detectedChanges = learningChangedFields(learningSnapshot.originalResult, corrected);
+  const changes = detectedChanges.length ? detectedChanges : [{ row: 0, field: "example", change: "confirmed" }];
+  const items = localLearningCases();
+  const normalizedText = normalizeLearningText(learningSnapshot.sourceText);
+  const pattern = learningTextPattern(learningSnapshot.sourceText);
+  const existing = items.find((item) => item.normalizedText === normalizedText && item.enabled !== false)
+    || items.find((item) => effectiveLearningTemplate(item).pattern === pattern && item.enabled !== false);
+  const now = new Date().toISOString();
+  const entry = {
+    id: existing?.id || makeId(),
+    sourceText: learningSnapshot.sourceText,
+    normalizedText,
+    originalResult: learningSnapshot.originalResult,
+    correctedResult: corrected,
+    changedFields: changes,
+    template: buildLearningTemplate(learningSnapshot.sourceText, corrected),
+    createdAt: existing?.createdAt || now,
+    updatedAt: now,
+    hitCount: existing?.hitCount || 0,
+    lastUsedAt: existing?.lastUsedAt || null,
+    enabled: true
+  };
+  const next = [entry, ...items.filter((item) => item.id !== entry.id && effectiveLearningTemplate(item).pattern !== pattern)];
+  saveLearningValue(LEARNING_CASES_KEY, next.slice(0, 500));
+  const rules = localLearningRules();
+  const candidate = additionRuleCandidate(entry.sourceText, changes, entry.id);
+  if (candidate) {
+    const existingRule = rules.find((rule) => rule.kind === candidate.kind && rule.status === "pending");
+    if (existingRule) {
+      existingRule.sourceCaseIds = [...new Set([...(existingRule.sourceCaseIds || []), entry.id])];
+      saveLearningValue(LEARNING_RULES_KEY, rules);
+    } else {
+      saveLearningValue(LEARNING_RULES_KEY, [candidate, ...rules]);
+    }
+  }
+  return true;
+}
+
+function rememberCurrentCorrection() {
+  const status = $("learningEntryStatus");
+  if (!learningSettings().enabled) {
+    if (status) status.textContent = "请先在解析学习库开启总开关";
+    return;
+  }
+  if (!learningSnapshot || !parsed.length) {
+    if (status) status.textContent = "请先输入并解析一张示例注单";
+    return;
+  }
+  parsed.forEach((_, index) => refreshParsedOrder(index));
+  if (parsed.some((order) => order.warnings?.length)) {
+    if (status) status.textContent = "修正结果仍有错误提示，请先修改完整";
+    return;
+  }
+  saveLearningCase();
+  if ($("rememberCorrection")) $("rememberCorrection").checked = true;
+  if (status) status.textContent = "已保存本次示范；现在可直接换金额测试，无需先入库";
+}
+
+function applyExactLearningCase(sourceText, baseline) {
+  if (!learningSettings().enabled) {
+    learningLastDecision.reason = "learning_disabled";
+    return baseline;
+  }
+  const normalizedText = normalizeLearningText(sourceText);
+  const cases = learningCases();
+  const exact = cases.find((entry) => entry.enabled !== false && (entry.normalizedText === normalizedText || normalizeLearningText(entry.sourceText) === normalizedText));
+  const patternMatches = cases.filter((entry) => entry.enabled !== false && effectiveLearningTemplate(entry).pattern === learningTextPattern(sourceText));
+  const signatures = [...new Set(patternMatches.map(learningTemplateSignature))];
+  const repeatedMatch = !exact && !patternMatches.length ? repeatedNumberAmountLearningMatch(cases, sourceText) : null;
+  const fuzzyMatch = !exact && !patternMatches.length && !repeatedMatch ? fuzzyLearningCase(cases, sourceText) : null;
+  const item = exact || (patternMatches.length && signatures.length === 1 ? patternMatches[0] : null) || repeatedMatch?.item || fuzzyMatch?.item;
+  if (!item) {
+    if (patternMatches.length > 1) {
+      recordLearningConflict("multiple_template_matches", sourceText, { caseIds: patternMatches.map((entry) => entry.id) });
+      learningLastDecision.reason = "multiple_template_matches";
+    } else {
+      learningLastDecision.reason = cases.length ? "no_matching_case" : "learning_library_empty";
+    }
+    return baseline;
+  }
+  const matchType = exact ? "exact" : repeatedMatch ? "repeated_template" : fuzzyMatch ? "fuzzy" : "template";
+  const score = exact || !fuzzyMatch ? 1 : fuzzyMatch.similarity;
+  if (exact && learningStructuralFingerprint(baseline) !== learningStructuralFingerprint(item.originalResult)) {
+    recordLearningConflict("baseline_changed", sourceText, { caseId: item.id });
+    learningLastDecision.reason = "exact_case_applied_baseline_changed";
+  }
+  if (!exact) {
+    const materialized = repeatedMatch?.orders || materializeLearningTemplate(item, sourceText, Boolean(fuzzyMatch));
+    if (!materialized?.length) {
+      learningLastDecision.reason = "template_materialization_failed";
+      return baseline;
+    }
+    item.hitCount = Number(item.hitCount || 0) + 1;
+    item.templateHitCount = Number(item.templateHitCount || 0) + 1;
+    if (fuzzyMatch) item.fuzzyHitCount = Number(item.fuzzyHitCount || 0) + 1;
+    item.lastUsedAt = new Date().toISOString();
+    persistLearningCaseUsage(item);
+    learningAppliedCaseId = item.id;
+    learningLastDecision = { ...learningLastDecision, hit: true, caseId: item.id, matchType, score, finalSource: "learning_case", reason: "applied" };
+    return materialized;
+  }
+  const customer = currentCustomer();
+  const learned = item.correctedResult.map((order) => applyCustomerDefaults(makeOrder({
+    raw: sourceText,
+    region: order.region,
+    type: order.type,
+    targets: order.targets,
+    amount: order.amount
+  }), customer));
+  learned.forEach((order) => {
+    updateOrderTotal(order);
+    order.warnings = validateParsedOrder(order);
+  });
+  item.hitCount = Number(item.hitCount || 0) + 1;
+  item.lastUsedAt = new Date().toISOString();
+  persistLearningCaseUsage(item);
+  learningAppliedCaseId = item.id;
+  learningLastDecision = {
+    ...learningLastDecision,
+    hit: true,
+    caseId: item.id,
+    matchType,
+    score,
+    finalSource: "learning_case",
+    reason: learningLastDecision.reason === "exact_case_applied_baseline_changed" ? learningLastDecision.reason : "applied"
+  };
+  return learned;
+}
+
+function applyConfirmedAdditionRules(sourceText, baseline) {
+  if (!learningSettings().enabled) return baseline;
+  const rules = learningRules().filter((rule) => rule.kind === "append_amount" && rule.status === "confirmed" && rule.enabled);
+  if (!rules.length) return baseline;
+  const matches = [...String(sourceText || "").matchAll(/([鼠牛虎兔龙蛇马羊猴鸡狗猪])\s*(?:再加|加|\+)\s*(\d+(?:\.\d+)?)/g)];
+  if (!matches.length) return baseline;
+  const next = baseline.map((order) => ({ ...order, targets: [...(order.targets || [])], warnings: [...(order.warnings || [])] }));
+  let applied = 0;
+  matches.forEach((match) => {
+    const zodiac = match[1];
+    const amount = Number(match[2]);
+    const candidates = next.filter((order) => order.targets?.includes(zodiac) && !String(order.raw || "").match(/再加|加|\+/));
+    const additionRows = next.filter((order) => String(order.raw || "").includes(match[0]));
+    if (candidates.length !== 1 || additionRows.length > 1) {
+      recordLearningConflict("append_ambiguous", sourceText, { expression: match[0], candidateCount: candidates.length });
+      return;
+    }
+    candidates[0].amount = Number(candidates[0].amount || 0) + amount;
+    updateOrderTotal(candidates[0]);
+    candidates[0].warnings = validateParsedOrder(candidates[0]);
+    additionRows.forEach((row) => {
+      const index = next.indexOf(row);
+      if (index >= 0) next.splice(index, 1);
+    });
+    applied += 1;
+  });
+  if (applied) {
+    const rule = rules[0];
+    rule.hitCount = Number(rule.hitCount || 0) + applied;
+    rule.lastUsedAt = new Date().toISOString();
+    const allRules = localLearningRules().map((item) => item.id === rule.id ? rule : item);
+    saveLearningValue(LEARNING_RULES_KEY, allRules);
+    learningLastDecision = { ...learningLastDecision, hit: true, caseId: rule.id, matchType: "confirmed_rule", score: 1, finalSource: "confirmed_learning_rule", reason: "applied" };
+  }
+  return next;
+}
+
+function applyEachNumberXRule(sourceText, baseline) {
+  if (!learningSettings().enabled) return baseline;
+  const source = String(sourceText || "").replace(/[Ⅹⅹ×＊*]/g, "x");
+  if (!/[xX]/.test(source)) return baseline;
+  const number = "(?:0?[1-9]|[1-4][0-9])";
+  const separator = "[ \\t.。．、,，\\-]+";
+  const expression = new RegExp(`((?:${number})(?:${separator}${number})*)[\\s.。．、,，]*[xX]\\s*(\\d+)`, "g");
+  const matches = [...source.matchAll(expression)];
+  if (!matches.length) return baseline;
+  const residue = source
+    .replace(expression, " ")
+    .replace(/澳门|香港|澳|港|特码|特码/g, " ")
+    .replace(/[\s.。．、,，;；\-]+/g, "");
+  if (residue) return baseline;
+  const region = baseline[0]?.region || detectRegion(source, $("defaultRegion")?.value || "澳门");
+  const type = baseline[0]?.type || $("defaultType")?.value || "特码";
+  const customer = currentCustomer();
+  const learned = matches.map((match) => {
+    const targets = (match[1].match(/\d+/g) || [])
+      .map((value) => Number(value))
+      .filter((value) => value >= 1 && value <= 49)
+      .map(pad);
+    const order = applyCustomerDefaults(makeOrder({ raw: match[0], region, type, targets, amount: Number(match[2]) }), customer);
+    updateOrderTotal(order);
+    order.warnings = validateParsedOrder(order);
+    return order;
+  }).filter((order) => order.targets.length && order.amount > 0);
+  if (!learned.length || learned.length !== matches.length) return baseline;
+  learningAppliedCaseId = "builtin-each-number-x-v1";
+  learningLastDecision = {
+    ...learningLastDecision,
+    hit: true,
+    caseId: learningAppliedCaseId,
+    matchType: "confirmed_rule",
+    score: 1,
+    finalSource: "confirmed_learning_rule",
+    reason: "applied"
+  };
+  return learned;
+}
+
+function applyMixedEachNumberRule(sourceText, baseline) {
+  if (!learningSettings().enabled) return baseline;
+  const source = String(sourceText || "").replace(/[Ⅹⅹ×＊*]/g, "x");
+  const zodiacExpression = /([鼠牛虎兔龙蛇马羊猴鸡狗猪]+)\s*(?:各号|各数)\s*(\d+)/g;
+  const number = "(?:0?[1-9]|[1-4][0-9])";
+  const separator = "[ \\t.。．、,，\\-]+";
+  const numberExpression = new RegExp(`((?:${number})(?:${separator}${number})*)[\\s.。．、,，]*[xX]\\s*(\\d+)`, "g");
+  const zodiacMatches = [...source.matchAll(zodiacExpression)];
+  const numberMatches = [...source.matchAll(numberExpression)];
+  if (!zodiacMatches.length || !numberMatches.length) return baseline;
+  const residue = source
+    .replace(zodiacExpression, " ")
+    .replace(numberExpression, " ")
+    .replace(/[xX\s.。．、,，;；\-]+/g, "");
+  if (residue) return baseline;
+  const region = baseline[0]?.region || detectRegion(source, $("defaultRegion")?.value || "澳门");
+  const customer = currentCustomer();
+  const definitions = [
+    ...zodiacMatches.map((match) => ({
+      index: match.index,
+      raw: match[0],
+      type: "特码",
+      targets: uniqueTargets((match[1].match(/[鼠牛虎兔龙蛇马羊猴鸡狗猪]/g) || []).flatMap(paddedNumbersForZodiac)),
+      amount: Number(match[2])
+    })),
+    ...numberMatches.map((match) => ({
+      index: match.index,
+      raw: match[0],
+      type: "特码",
+      targets: (match[1].match(/\d+/g) || []).map((value) => pad(Number(value))),
+      amount: Number(match[2])
+    }))
+  ].sort((left, right) => left.index - right.index);
+  const learned = definitions.map((definition) => {
+    const order = applyCustomerDefaults(makeOrder({ raw: definition.raw, region, type: definition.type, targets: definition.targets, amount: definition.amount }), customer);
+    updateOrderTotal(order);
+    order.warnings = validateParsedOrder(order);
+    return order;
+  });
+  learningAppliedCaseId = "builtin-mixed-each-number-v1";
+  learningLastDecision = {
+    ...learningLastDecision,
+    hit: true,
+    caseId: learningAppliedCaseId,
+    matchType: "confirmed_rule",
+    score: 1,
+    finalSource: "confirmed_learning_rule",
+    reason: "applied"
+  };
+  return learned;
+}
+
+function applyZodiacGroupedLearningRule(sourceText, baseline) {
+  if (!learningSettings().enabled) return baseline;
+  const tokens = String(sourceText || "")
+    .replace(/[，、；;]+/g, ",")
+    .split(/[,\n]+/)
+    .map((token) => token.trim())
+    .filter(Boolean);
+  const playType = (token) => {
+    if (/^平特?一肖$/.test(token) || token === "平肖") return "平肖";
+    if (token === "特肖" || token === "一肖" || /^[二三四五]连肖$/.test(token)) return token;
+    return null;
+  };
+  const groups = [];
+  let current = null;
+  for (const token of tokens) {
+    const type = playType(token);
+    if (type) {
+      if (current) return baseline;
+      current = { type, targets: [] };
+      continue;
+    }
+    if (!current) return baseline;
+    const amountMatch = token.match(/^(\d+(?:\.\d+)?)\s*(?:元|块|米)?$/);
+    if (amountMatch) {
+      if (!current.targets.length) return baseline;
+      groups.push({ ...current, amount: Number(amountMatch[1]) });
+      current = null;
+      continue;
+    }
+    const targets = token.match(/[鼠牛虎兔龙蛇马羊猴鸡狗猪]/g) || [];
+    if (!targets.length || targets.join("") !== token.replace(/\s+/g, "")) return baseline;
+    current.targets.push(...targets);
+  }
+  if (current || groups.length < 2) return baseline;
+  const region = baseline[0]?.region || detectRegion(sourceText, $("defaultRegion")?.value || "澳门");
+  const customer = currentCustomer();
+  const learned = groups.map((group) => {
+    const order = applyCustomerDefaults(makeOrder({ raw: sourceText, region, type: group.type, targets: uniqueTargets(group.targets), amount: group.amount }), customer);
+    updateOrderTotal(order);
+    order.warnings = validateParsedOrder(order);
+    return order;
+  });
+  learningAppliedCaseId = "builtin-zodiac-grouped-v1";
+  learningLastDecision = {
+    ...learningLastDecision,
+    hit: true,
+    caseId: learningAppliedCaseId,
+    matchType: "confirmed_rule",
+    score: 1,
+    finalSource: "confirmed_learning_rule",
+    reason: "applied"
+  };
+  return learned;
 }
 
 let webLlmEnginePromise = null;
@@ -1992,7 +2658,7 @@ async function aiParseOrders() {
     if (!cleaned) throw new Error("empty-ai-result");
     input.value = cleaned;
     resizeOrderInput();
-    parseOrders();
+    parseOrders(raw);
     setOcrStatus("AI已整理，请核对后入库");
   } catch (error) {
     console.warn(error);
@@ -2187,12 +2853,20 @@ function renderParsed() {
           ${visiblePlayTypes.map((type) => `<option value="${type}" ${o.type === type ? "selected" : ""}>${type}</option>`).join("")}
         </select>
       </td>
-      <td class="targets-cell"><textarea class="parsed-edit parsed-targets" data-index="${index}" data-field="targets" rows="2">${htmlEscape(o.targets.join(" "))}</textarea></td>
+      <td class="targets-cell">
+        <div class="parsed-mobile-controls">
+          <select class="parsed-edit" data-index="${index}" data-field="type">
+            ${visiblePlayTypes.map((type) => `<option value="${type}" ${o.type === type ? "selected" : ""}>${type}</option>`).join("")}
+          </select>
+          <button class="plain danger-text parsed-delete" data-index="${index}" type="button">删除本行</button>
+        </div>
+        <textarea class="parsed-edit parsed-targets" data-index="${index}" data-field="targets" rows="2">${htmlEscape(o.targets.join(" "))}</textarea>
+      </td>
       <td><input class="parsed-edit parsed-number" data-index="${index}" data-field="amount" type="number" min="0" step="0.01" value="${money(o.amount)}" /></td>
       <td><input class="parsed-edit parsed-number" data-index="${index}" data-field="odds" type="number" min="0" step="0.01" value="${money(o.odds)}" /></td>
       <td>${money(o.total)}</td>
       <td class="${o.warnings.length ? "warn" : "ok"}">${o.warnings.join("，") || o.hint || "可入库"}</td>
-      <td><button class="plain danger-text parsed-delete" data-index="${index}" type="button">删除</button></td>
+      <td><button class="plain parsed-duplicate" data-index="${index}" type="button">复制</button><button class="plain danger-text parsed-delete" data-index="${index}" type="button">删除</button></td>
     </tr>
   `).join("");
   $("parsedRows").querySelectorAll(".parsed-edit").forEach((input) => input.addEventListener("change", updateParsedFromEdit));
@@ -2203,6 +2877,38 @@ function renderParsed() {
       renderDeferred();
     });
   });
+  $("parsedRows").querySelectorAll(".parsed-duplicate").forEach((button) => {
+    button.addEventListener("click", () => duplicateParsedOrder(Number(button.dataset.index)));
+  });
+}
+
+function duplicateParsedOrder(index) {
+  const source = parsed[index];
+  if (!source) return;
+  const copy = {
+    ...source,
+    id: makeId(),
+    targets: [...(source.targets || [])],
+    warnings: [...(source.warnings || [])],
+    raw: `${source.raw || $("orderInput")?.value || ""}（人工拆分）`
+  };
+  parsed.splice(index + 1, 0, copy);
+  renderParsed();
+  renderDeferred();
+}
+
+function addParsedOrder() {
+  const customer = currentCustomer();
+  const order = applyCustomerDefaults(makeOrder({
+    raw: `${$("orderInput")?.value || ""}（人工新增）`,
+    region: $("defaultRegion")?.value || "澳门",
+    type: $("defaultType")?.value || "特码",
+    targets: [],
+    amount: 0
+  }), customer);
+  parsed.push(order);
+  renderParsed();
+  renderDeferred();
 }
 
 function updateParsedFromEdit(event) {
@@ -2328,6 +3034,8 @@ function saveParsed() {
     alert("没有可入库的注单，请先检查解析提示。");
     return;
   }
+  const remember = $("rememberCorrection")?.checked;
+  const remembered = remember && saveLearningCase();
   const customer = currentCustomer();
   orders = [...valid.map((o) => ({
     ...o,
@@ -2342,6 +3050,7 @@ function saveParsed() {
   $("orderInput").value = "";
   saveAll();
   renderAll();
+  if (remembered) alert("本次人工修正已保存到本地解析学习库");
 }
 
 function parseDrawNumbers() {
@@ -3091,6 +3800,20 @@ window.FortuneApp = {
   openEntryTools,
   openMobilePanel,
   closeMobilePanels
+  ,openLearningLibrary
+  ,closeLearningLibrary
+  ,toggleLearningEnabled
+  ,toggleLearningCase
+  ,deleteLearningCase
+  ,setLearningRuleStatus
+  ,toggleLearningRule
+  ,deleteLearningRule
+  ,rememberCurrentCorrection
+  ,addParsedOrder
+  ,exportLearningPackage
+  ,importLearningPackage
+  ,syncRemoteLearningPackage
+  ,publishLearningPackage
 };
 
 function bindControls() {
@@ -3141,8 +3864,276 @@ function clearInput() {
   resizeOrderInput();
   parsed = [];
   deferredLines = [];
+  learningSnapshot = null;
+  learningAppliedCaseId = null;
+  learningLastDecision = { hit: false, caseId: null, matchType: "none", score: 0, finalSource: "original_parser", reason: "cleared", normalizedText: "" };
+  if ($("rememberCorrection")) $("rememberCorrection").checked = false;
   renderParsed();
   renderDeferred();
+}
+
+function renderLearningEntryStatus() {
+  const status = $("learningEntryStatus");
+  const toggle = $("rememberCorrection");
+  if (!status) return;
+  const enabled = Boolean(learningSettings().enabled);
+  status.textContent = learningAppliedCaseId
+    ? "已参考本地人工纠错案例"
+    : enabled ? "学习功能已开启" : "学习功能已关闭（原解析器模式）";
+  const trace = $("learningTrace");
+  if (trace) {
+    const matchLabels = { exact: "精确案例", template: "表达模板", fuzzy: "近似表达", confirmed_rule: "已确认规则", none: "未匹配" };
+    const sourceLabels = { learning_case: "学习案例", confirmed_learning_rule: "已确认学习规则", original_parser: "原解析器" };
+    const reasonLabels = {
+      applied: "已采用",
+      exact_case_applied_baseline_changed: "原解析结果已变化；记录冲突后仍采用人工精确案例",
+      no_matching_case: "学习库中没有匹配案例",
+      learning_library_empty: "学习库为空",
+      multiple_template_matches: "多个模板结论冲突",
+      template_materialization_failed: "模板生成结果失败",
+      learning_disabled: "学习总开关关闭",
+      no_match: "未命中",
+      not_checked: "尚未解析",
+      cleared: "输入已清空"
+    };
+    const decision = learningLastDecision;
+    trace.innerHTML = `
+      <span>命中学习库：<b class="${decision.hit ? "ok" : "warn"}">${decision.hit ? "是" : "否"}</b></span>
+      <span>案例/规则ID：<b>${htmlEscape(decision.caseId || "-")}</b></span>
+      <span>匹配方式：<b>${htmlEscape(matchLabels[decision.matchType] || decision.matchType)}</b></span>
+      <span>匹配分数：<b>${decision.hit ? `${Math.round(Number(decision.score || 0) * 100)}%` : "-"}</b></span>
+      <span>最终采用：<b>${htmlEscape(sourceLabels[decision.finalSource] || decision.finalSource)}</b></span>
+      <span>说明：<b>${htmlEscape(reasonLabels[decision.reason] || decision.reason)}</b></span>
+      <span class="learning-normalized">标准化文本：${htmlEscape(decision.normalizedText || "-")}</span>
+    `;
+  }
+  if (toggle) toggle.disabled = !enabled;
+  if ($("rememberCorrectionNowBtn")) $("rememberCorrectionNowBtn").disabled = !enabled;
+}
+
+function openLearningLibrary() {
+  renderLearningLibrary();
+  const dialog = $("learningLibraryDialog");
+  if (typeof dialog?.showModal === "function") dialog.showModal();
+  else dialog?.setAttribute("open", "");
+}
+
+function closeLearningLibrary() {
+  const dialog = $("learningLibraryDialog");
+  if (typeof dialog?.close === "function") dialog.close();
+  else dialog?.removeAttribute("open");
+}
+
+function toggleLearningEnabled() {
+  const enabled = Boolean($("learningMasterSwitch")?.checked);
+  saveLearningValue(LEARNING_SETTINGS_KEY, { enabled, updatedAt: new Date().toISOString() });
+  if (!enabled) learningAppliedCaseId = null;
+  renderLearningLibrary();
+  if (enabled) syncRemoteLearningPackage();
+  else parseOrders();
+}
+
+function toggleLearningCase(id) {
+  const items = localLearningCases().map((item) => item.id === id ? { ...item, enabled: !item.enabled } : item);
+  saveLearningValue(LEARNING_CASES_KEY, items);
+  renderLearningLibrary();
+}
+
+function deleteLearningCase(id) {
+  if (!confirm("确认删除这条纠错案例？")) return;
+  saveLearningValue(LEARNING_CASES_KEY, localLearningCases().filter((item) => item.id !== id));
+  saveLearningValue(LEARNING_RULES_KEY, localLearningRules().map((rule) => ({ ...rule, sourceCaseIds: (rule.sourceCaseIds || []).filter((caseId) => caseId !== id) })));
+  renderLearningLibrary();
+}
+
+function setLearningRuleStatus(id, status) {
+  const items = localLearningRules().map((item) => item.id === id ? {
+    ...item,
+    status,
+    enabled: status === "confirmed",
+    confirmedAt: status === "confirmed" ? new Date().toISOString() : null
+  } : item);
+  saveLearningValue(LEARNING_RULES_KEY, items);
+  renderLearningLibrary();
+}
+
+function toggleLearningRule(id) {
+  saveLearningValue(LEARNING_RULES_KEY, localLearningRules().map((item) => item.id === id ? { ...item, enabled: !item.enabled } : item));
+  renderLearningLibrary();
+}
+
+function deleteLearningRule(id) {
+  if (!confirm("确认删除这条学习规则？")) return;
+  saveLearningValue(LEARNING_RULES_KEY, localLearningRules().filter((item) => item.id !== id));
+  renderLearningLibrary();
+}
+
+function remoteLearningSettings() {
+  return loadJson(LEARNING_REMOTE_SETTINGS_KEY, { url: DEFAULT_LEARNING_PACKAGE_URL, channel: "test" });
+}
+
+function saveRemoteLearningSettingsFromControls() {
+  const settings = {
+    url: String($("learningRemoteUrl")?.value || "").trim(),
+    channel: String($("learningRemoteChannel")?.value || "test").trim() || "test"
+  };
+  saveLearningValue(LEARNING_REMOTE_SETTINGS_KEY, settings);
+  return settings;
+}
+
+function learningPackageVersion() {
+  const date = new Date();
+  const stamp = date.toISOString().replace(/[-:TZ.]/g, "").slice(0, 14);
+  return `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, "0")}.${String(date.getDate()).padStart(2, "0")}.${stamp.slice(8)}`;
+}
+
+function buildPublishableLearningPackage(channel = "test") {
+  const cases = localLearningCases().filter((item) => item.enabled !== false).map((item) => ({
+    id: item.id,
+    sourceText: `远程模板：${effectiveLearningTemplate(item).pattern}`,
+    normalizedText: "",
+    correctedResult: [],
+    changedFields: item.changedFields || [],
+    template: effectiveLearningTemplate(item),
+    enabled: true,
+    origin: "remote",
+    createdAt: item.createdAt,
+    hitCount: 0,
+    lastUsedAt: null
+  }));
+  const rules = localLearningRules().filter((item) => item.status === "confirmed" && item.enabled).map((item) => ({
+    ...item,
+    origin: "remote",
+    hitCount: 0,
+    lastUsedAt: null
+  }));
+  return {
+    schemaVersion: 1,
+    packageType: "fortune-parser-learning",
+    version: learningPackageVersion(),
+    channel,
+    enabled: true,
+    generatedAt: new Date().toISOString(),
+    containsRawOrders: false,
+    cases,
+    rules
+  };
+}
+
+function validateLearningPackage(value) {
+  if (!value || value.schemaVersion !== 1 || value.packageType !== "fortune-parser-learning") throw new Error("学习包格式不正确");
+  if (!Array.isArray(value.cases) || !Array.isArray(value.rules)) throw new Error("学习包缺少案例或规则列表");
+  value.cases.forEach((item) => {
+    if (!item.id || !item.template?.pattern || !Array.isArray(item.template?.orders)) throw new Error("学习包包含无效模板");
+  });
+  value.rules.forEach((item) => {
+    if (!item.id || item.status !== "confirmed") throw new Error("学习包包含未经确认的规则");
+  });
+  return value;
+}
+
+function installRemoteLearningPackage(value) {
+  const packageValue = validateLearningPackage(value);
+  saveLearningValue(LEARNING_REMOTE_PACKAGE_KEY, packageValue);
+  return packageValue;
+}
+
+function exportLearningPackage() {
+  const settings = saveRemoteLearningSettingsFromControls();
+  const packageValue = buildPublishableLearningPackage(settings.channel);
+  const blob = new Blob([JSON.stringify(packageValue, null, 2)], { type: "application/json;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `parser-learning-${packageValue.channel}-${packageValue.version}.json`;
+  link.click();
+  URL.revokeObjectURL(url);
+  if ($("learningRemoteStatus")) $("learningRemoteStatus").textContent = `已导出 ${packageValue.version}，不包含原始注单`;
+}
+
+async function importLearningPackage(event) {
+  const input = event?.target;
+  const file = input?.files?.[0];
+  if (!file) return;
+  try {
+    const installed = installRemoteLearningPackage(JSON.parse(await file.text()));
+    if ($("learningRemoteStatus")) $("learningRemoteStatus").textContent = `已安装学习包 ${installed.version}`;
+    renderLearningLibrary();
+  } catch (error) {
+    if ($("learningRemoteStatus")) $("learningRemoteStatus").textContent = error.message || "学习包导入失败";
+  } finally {
+    input.value = "";
+  }
+}
+
+function remoteLearningUrl(settings) {
+  const separator = settings.url.includes("?") ? "&" : "?";
+  return `${settings.url}${separator}channel=${encodeURIComponent(settings.channel)}`;
+}
+
+async function syncRemoteLearningPackage() {
+  const settings = saveRemoteLearningSettingsFromControls();
+  if (!settings.url) {
+    $("learningRemoteStatus").textContent = "请先填写远程学习包地址";
+    return;
+  }
+  $("learningRemoteStatus").textContent = "正在同步测试通道...";
+  try {
+    const response = await fetchWithTimeout(remoteLearningUrl(settings), { cache: "no-store" }, 15000);
+    if (!response.ok) throw new Error(`同步失败（${response.status}）`);
+    const installed = installRemoteLearningPackage(await response.json());
+    $("learningRemoteStatus").textContent = `同步成功：${installed.version}`;
+    renderLearningLibrary();
+    parseOrders();
+  } catch (error) {
+    $("learningRemoteStatus").textContent = `${error.message || "同步失败"}；继续使用本机已有规则`;
+  }
+}
+
+async function publishLearningPackage() {
+  const settings = saveRemoteLearningSettingsFromControls();
+  const publishKey = String($("learningPublishKey")?.value || "").trim();
+  if (!settings.url || !publishKey) {
+    $("learningRemoteStatus").textContent = "发布需要远程地址和临时发布密钥";
+    return;
+  }
+  const packageValue = buildPublishableLearningPackage(settings.channel);
+  $("learningRemoteStatus").textContent = `正在发布 ${packageValue.version}...`;
+  try {
+    const response = await fetchWithTimeout(remoteLearningUrl(settings), {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-parser-learning-publish-key": publishKey },
+      body: JSON.stringify(packageValue)
+    }, 15000);
+    if (!response.ok) throw new Error(`发布失败（${response.status}）`);
+    $("learningPublishKey").value = "";
+    $("learningRemoteStatus").textContent = `已发布到${settings.channel === "stable" ? "正式" : "测试"}通道：${packageValue.version}`;
+  } catch (error) {
+    $("learningRemoteStatus").textContent = error.message || "发布失败";
+  }
+}
+
+function renderLearningLibrary() {
+  const settings = learningSettings();
+  if ($("learningMasterSwitch")) $("learningMasterSwitch").checked = Boolean(settings.enabled);
+  const cases = learningCases();
+  const rules = learningRules();
+  const conflicts = learningConflicts();
+  const remoteSettings = remoteLearningSettings();
+  const remotePackage = loadJson(LEARNING_REMOTE_PACKAGE_KEY, null);
+  if ($("learningRemoteUrl")) $("learningRemoteUrl").value = remoteSettings.url || "";
+  if ($("learningRemoteChannel")) $("learningRemoteChannel").value = remoteSettings.channel || "test";
+  if ($("learningInstalledVersion")) $("learningInstalledVersion").textContent = remotePackage?.version || "尚未安装远程包";
+  if ($("learningCaseRows")) $("learningCaseRows").innerHTML = cases.length ? cases.map((item) => `
+    <tr><td><pre>${htmlEscape(item.sourceText)}</pre><small>模板：${htmlEscape(effectiveLearningTemplate(item).pattern)}</small></td><td><pre>${htmlEscape(JSON.stringify(item.originalResult, null, 2))}</pre></td><td><pre>${htmlEscape(JSON.stringify(item.correctedResult, null, 2))}</pre></td><td>${item.changedFields.map((field) => htmlEscape(field.field)).join("、")}</td><td>${new Date(item.createdAt).toLocaleString()}</td><td>${item.hitCount || 0}<br><small>模板 ${item.templateHitCount || 0} 次</small><br><small>${item.lastUsedAt ? new Date(item.lastUsedAt).toLocaleString() : "未使用"}</small></td><td><button type="button" onclick="FortuneApp.toggleLearningCase('${item.id}')">${item.enabled ? "停用" : "启用"}</button><button class="danger" type="button" onclick="FortuneApp.deleteLearningCase('${item.id}')">删除</button></td></tr>
+  `).join("") : '<tr><td colspan="7">暂无人工纠错案例</td></tr>';
+  if ($("learningRuleRows")) $("learningRuleRows").innerHTML = rules.length ? rules.map((item) => `
+    <tr><td>${htmlEscape(item.name)}</td><td>${item.status}</td><td>${(item.sourceCaseIds || []).length}</td><td>${item.hitCount || 0}<br><small>${item.lastUsedAt ? new Date(item.lastUsedAt).toLocaleString() : "未使用"}</small></td><td>${item.status === "pending" ? `<button type="button" onclick="FortuneApp.setLearningRuleStatus('${item.id}','confirmed')">确认规则</button><button type="button" onclick="FortuneApp.setLearningRuleStatus('${item.id}','rejected')">拒绝</button>` : `<button type="button" onclick="FortuneApp.toggleLearningRule('${item.id}')">${item.enabled ? "停用" : "启用"}</button>`}<button class="danger" type="button" onclick="FortuneApp.deleteLearningRule('${item.id}')">删除</button></td></tr>
+  `).join("") : '<tr><td colspan="5">暂无候选规则</td></tr>';
+  if ($("learningConflictRows")) $("learningConflictRows").innerHTML = conflicts.length ? conflicts.map((item) => `
+    <tr><td>${new Date(item.createdAt).toLocaleString()}</td><td>${htmlEscape(item.kind)}</td><td><pre>${htmlEscape(item.sourceText)}</pre></td></tr>
+  `).join("") : '<tr><td colspan="3">暂无冲突</td></tr>';
+  renderLearningEntryStatus();
 }
 
 function bindDrawBlessingVideo() {
@@ -3179,5 +4170,7 @@ on("orderInput", "input", resizeOrderInput);
 runSafe(resizeOrderInput);
 runSafe(initLicenseGate);
 runSafe(renderAll);
+runSafe(renderLearningLibrary);
+if (learningSettings().enabled) syncRemoteLearningPackage().catch(() => {});
 syncAiExamplesWithBridge().catch(() => {});
 })();

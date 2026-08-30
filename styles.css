@@ -244,6 +244,25 @@ textarea:focus {
   outline: none;
 }
 
+.app-header h1 small { font-size: 13px; color: #fff3a8; }
+.remember-correction, .learning-master-switch { display: inline-flex; align-items: center; gap: 8px; font-weight: 800; }
+.remember-correction input, .learning-master-switch input { width: 18px; height: 18px; }
+.learning-library-dialog { width: min(1380px, 96vw); max-width: 1380px; }
+.learning-library-dialog details { margin-top: 14px; }
+.learning-master-switch { padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: #fff8df; }
+.learning-table { max-height: 360px; overflow: auto; }
+.learning-table table { min-width: 980px; }
+.learning-table pre { margin: 0; max-width: 320px; max-height: 150px; overflow: auto; white-space: pre-wrap; font: 12px/1.45 Consolas, monospace; }
+.learning-table button { width: auto; min-height: 30px; margin: 2px; padding: 4px 8px; }
+.learning-trace { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px 12px; margin: 10px 0; padding: 10px 12px; border: 1px solid #cfd8ef; border-radius: 8px; background: #f7f9ff; font-size: 13px; }
+.learning-trace span { min-width: 0; overflow-wrap: anywhere; }
+.learning-trace .learning-normalized { grid-column: 1 / -1; color: var(--muted); }
+.learning-remote-panel { margin-top: 14px; padding: 14px; border: 1px solid var(--line); border-radius: 8px; background: #f7f9ff; }
+.learning-remote-panel h3 { margin-top: 0; }
+.learning-remote-grid { display: grid; grid-template-columns: 2fr 1fr 1.4fr; gap: 10px; }
+.learning-remote-grid label { display: grid; gap: 5px; font-weight: 700; }
+@media (max-width: 800px) { .learning-remote-grid, .learning-trace { grid-template-columns: 1fr; } .learning-trace .learning-normalized { grid-column: auto; } }
+
 textarea {
   width: 100%;
   min-height: 160px;
@@ -893,6 +912,10 @@ label {
   overflow-wrap: anywhere;
 }
 
+.parsed-mobile-controls {
+  display: none;
+}
+
 .parsed-number {
   min-width: 82px;
 }
@@ -1002,6 +1025,22 @@ label {
 }
 
 @media (max-width: 640px) {
+  .parsed-mobile-controls {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 4px;
+  }
+
+  .parsed-mobile-controls select,
+  .parsed-mobile-controls button {
+    min-width: 0;
+    font-size: 12px;
+    padding: 5px 6px;
+  }
+
+  .parsed-mobile-controls select {
+    flex: 1;
+  }
   html {
     overflow-x: hidden;
   }

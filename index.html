@@ -15,7 +15,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="财神爷" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <link rel="manifest" href="./manifest.json?v=20260703_pwa_1" />
+    <link rel="manifest" href="./manifest.json?v=20260830_learning_single_1" />
     <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png?v=20260703_pwa_1" />
     <link rel="icon" type="image/png" sizes="512x512" href="./icons/icon-512.png?v=20260703_pwa_1" />
     <link rel="apple-touch-icon" sizes="180x180" href="./icons/apple-touch-icon.png?v=20260703_pwa_1" />
@@ -97,16 +97,42 @@
 
     <header class="app-header">
       <div>
-        <h1>财神爷</h1>
+        <h1>财神爷 <small>人工纠错学习</small></h1>
         <p>我要录单、开奖算奖、特码调单模拟</p>
-        <span class="privacy-badge">隐私模式：注单仅本机浏览器保存</span>
+        <span class="privacy-badge">隐私模式：注单及人工纠错仅在本机保存</span>
       </div>
       <div class="header-actions">
+        <button id="openLearningLibraryBtn" type="button" onclick="FortuneApp.openLearningLibrary()">解析学习库</button>
         <button id="openCustomerDialogBtn" type="button" onclick="FortuneApp.openCustomerDialog()">客户管理</button>
         <button id="openEntryToolsBtn" type="button" onclick="FortuneApp.openEntryTools()">辅助功能</button>
         <button id="clearOrdersBtn" class="danger" type="button" onclick="FortuneApp.clearOrders()">删除全部注单</button>
       </div>
     </header>
+
+    <dialog id="learningLibraryDialog" class="settings-dialog learning-library-dialog">
+      <div class="dialog-head">
+        <div><h2>解析学习库（单机版）</h2><p>实验功能；未确认规则不会参与解析</p></div>
+        <button class="plain" type="button" onclick="FortuneApp.closeLearningLibrary()">关闭</button>
+      </div>
+      <label class="learning-master-switch"><input id="learningMasterSwitch" type="checkbox" onchange="FortuneApp.toggleLearningEnabled()" /><span>解析学习功能：开启 / 关闭</span></label>
+      <section class="learning-remote-panel">
+        <h3>学习包发布与同步</h3>
+        <div class="learning-remote-grid">
+          <label>远程接口地址<input id="learningRemoteUrl" placeholder="例如：https://example.com/api/parser-learning/package" /></label>
+          <label>发布通道<select id="learningRemoteChannel"><option value="test">测试通道</option><option value="stable">正式通道</option></select></label>
+        </div>
+        <div class="ai-example-actions">
+          <button type="button" onclick="FortuneApp.exportLearningPackage()">导出学习包</button>
+          <label class="button-like" for="learningPackageImport">导入学习包</label><input id="learningPackageImport" type="file" accept="application/json,.json" hidden onchange="FortuneApp.importLearningPackage(event)" />
+          <button type="button" onclick="FortuneApp.syncRemoteLearningPackage()">立即同步</button>
+        </div>
+        <p>本机已安装版本：<b id="learningInstalledVersion">尚未安装远程包</b></p>
+        <p id="learningRemoteStatus" class="status">学习包默认不包含原始注单</p>
+      </section>
+      <details open><summary><b>人工纠错案例</b></summary><div class="table-wrap learning-table"><table><thead><tr><th>原始注单</th><th>原解析结果</th><th>人工修正结果</th><th>修改字段</th><th>创建时间</th><th>命中</th><th>操作</th></tr></thead><tbody id="learningCaseRows"></tbody></table></div></details>
+      <details open><summary><b>候选与已确认规则</b></summary><div class="table-wrap learning-table"><table><thead><tr><th>规则</th><th>状态</th><th>来源案例</th><th>命中</th><th>操作</th></tr></thead><tbody id="learningRuleRows"></tbody></table></div></details>
+      <details><summary><b>解析冲突</b></summary><div class="table-wrap learning-table"><table><thead><tr><th>时间</th><th>类型</th><th>原始注单</th></tr></thead><tbody id="learningConflictRows"></tbody></table></div></details>
+    </dialog>
 
     <dialog id="customerDialog" class="settings-dialog">
       <div class="dialog-head">
@@ -186,8 +212,13 @@
           <button id="parseBtn" type="button" onclick="FortuneApp.parseOrders()">解析注单</button>
           <button id="saveParsedBtn" type="button" onclick="FortuneApp.saveParsed()">入库</button>
           <button id="clearInputBtn" type="button" onclick="FortuneApp.clearInput()">清空输入</button>
+          <button id="addParsedOrderBtn" class="secondary" type="button" onclick="FortuneApp.addParsedOrder()">新增结果行</button>
+          <label class="remember-correction"><input id="rememberCorrection" type="checkbox" disabled /><span>记住这次修正</span></label>
+          <button id="rememberCorrectionNowBtn" class="secondary" type="button" disabled onclick="FortuneApp.rememberCurrentCorrection()">保存本次示范</button>
+          <span id="learningEntryStatus" class="toolbar-status">学习功能已关闭（原解析器模式）</span>
           <span id="ocrStatus" class="toolbar-status"></span>
         </div>
+        <div id="learningTrace" class="learning-trace" aria-live="polite"></div>
         <div class="table-wrap parsed-table">
           <table>
             <thead>
@@ -397,7 +428,7 @@
     </main>
 
     <script src="./config.js?v=20260709_order_type_clean"></script>
-    <script src="./app.js?v=20260718_zodiac_risk_settlement_v1"></script>
-    <script src="./pwa.js?v=20260709_order_type_clean"></script>
+    <script src="./app.js?v=20260830_learning_single_1"></script>
+    <script src="./pwa.js?v=20260830_learning_single_1"></script>
   </body>
 </html>
