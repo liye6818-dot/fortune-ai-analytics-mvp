@@ -1993,6 +1993,21 @@ function fuzzyLearningCase(cases, sourceText) {
   return ranked[0];
 }
 
+function safeFuzzyMeaning(left, right) {
+  const meaning = (value) => {
+    const text = normalizeLearningExpression(value);
+    return {
+      zodiacs: [...new Set(text.match(/[鼠牛虎兔龙蛇马羊猴鸡狗猪]/g) || [])].sort().join(""),
+      parity: text.includes("单") ? "单" : text.includes("双") ? "双" : ""
+    };
+  };
+  const a = meaning(left);
+  const b = meaning(right);
+  if ((a.zodiacs || b.zodiacs) && a.zodiacs !== b.zodiacs) return false;
+  if ((a.parity || b.parity) && a.parity !== b.parity) return false;
+  return true;
+}
+
 function numericTokenIndex(tokens, value, preferLast = false, startAt = 0, excluded = null) {
   const wanted = Number(value);
   const indexes = tokens.map((token, index) => index >= startAt && !excluded?.has(index) && Number(token) === wanted ? index : -1).filter((index) => index >= 0);
@@ -2263,7 +2278,8 @@ function applyExactLearningCase(sourceText, baseline) {
   const patternMatches = cases.filter((entry) => entry.enabled !== false && effectiveLearningTemplate(entry).pattern === learningTextPattern(sourceText));
   const signatures = [...new Set(patternMatches.map(learningTemplateSignature))];
   const repeatedMatch = !exact && !patternMatches.length ? repeatedNumberAmountLearningMatch(cases, sourceText) : null;
-  const fuzzyMatch = !exact && !patternMatches.length && !repeatedMatch ? fuzzyLearningCase(cases, sourceText) : null;
+  const fuzzyCandidate = !exact && !patternMatches.length && !repeatedMatch ? fuzzyLearningCase(cases, sourceText) : null;
+  const fuzzyMatch = fuzzyCandidate && safeFuzzyMeaning(fuzzyCandidate.item.sourceText, sourceText) ? fuzzyCandidate : null;
   const item = exact || (patternMatches.length && signatures.length === 1 ? patternMatches[0] : null) || repeatedMatch?.item || fuzzyMatch?.item;
   if (!item) {
     if (patternMatches.length > 1) {
@@ -2284,6 +2300,23 @@ function applyExactLearningCase(sourceText, baseline) {
     const materialized = repeatedMatch?.orders || materializeLearningTemplate(item, sourceText, Boolean(fuzzyMatch));
     if (!materialized?.length) {
       learningLastDecision.reason = "template_materialization_failed";
+      return baseline;
+    }
+    const sameStableShape = materialized.length === baseline.length && materialized.every((order, index) => {
+      const original = baseline[index];
+      return original && order.region === original.region && order.type === original.type;
+    });
+    const explicitSplitSyntax = /[xⅩⅹ×*＊]/i.test(sourceText)
+      && materialized.every((order) => order.region === baseline[0]?.region && order.type === baseline[0]?.type);
+    if (!repeatedMatch && !explicitSplitSyntax && !sameStableShape) {
+      recordLearningConflict("unsafe_template_shape", sourceText, {
+        caseId: item.id,
+        baselineRows: baseline.length,
+        learnedRows: materialized.length,
+        baselineTypes: baseline.map((order) => `${order.region}:${order.type}`),
+        learnedTypes: materialized.map((order) => `${order.region}:${order.type}`)
+      });
+      learningLastDecision.reason = "unsafe_template_shape";
       return baseline;
     }
     item.hitCount = Number(item.hitCount || 0) + 1;
