@@ -254,6 +254,25 @@ textarea:focus {
 .settlement-compact-formula strong { color: #0f172a; }
 .settlement-batch-meta { color: var(--muted); font-size: 13px; }
 .settlement-winning-summary { color: #b42318; font-size: 13px; font-weight: 700; }
+.settlement-batch-table-wrap { overflow-x: auto; border: 1px solid #cbd5e1; border-radius: 8px; }
+.settlement-batch-table { width: 100%; min-width: 560px; border-collapse: collapse; background: #fff; }
+.settlement-batch-table th, .settlement-batch-table td { padding: 7px 9px; border-right: 1px solid #d8dee8; border-bottom: 1px solid #d8dee8; text-align: center; }
+.settlement-batch-table th:last-child, .settlement-batch-table td:last-child { border-right: 0; }
+.settlement-batch-table tbody tr:last-child td { border-bottom: 0; }
+.settlement-batch-table th { background: #f1f5f9; color: #0f172a; font-weight: 800; }
+.settlement-batch-table td:nth-child(1) { width: 54px; }
+.settlement-batch-table td:nth-child(2) { width: 100px; font-size: 17px; }
+.settlement-batch-table td:nth-child(3) { width: 90px; color: #b42318; font-weight: 800; }
+.settlement-batch-table td:nth-child(4) { min-width: 150px; color: #b42318; font-weight: 700; }
+.settlement-batch-table td:nth-child(5) { width: 80px; }
+.settlement-batch-table .settlement-manual-editor { min-width: 68px; margin: 0; text-align: left; }
+.settlement-batch-table .settlement-manual-editor[open] { min-width: min(520px, 78vw); }
+.settlement-row-changed { background: #fffbea; }
+.settlement-ledger-summary { display: grid; gap: 5px; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; }
+.settlement-ledger-summary > div { display: grid; grid-template-columns: 110px 1fr; gap: 12px; align-items: baseline; }
+.settlement-ledger-summary span { font-weight: 700; text-align: right; }
+.settlement-ledger-summary b { color: #b42318; }
+.settlement-ledger-result { margin-top: 4px; padding-top: 7px; border-top: 2px solid #0f172a; font-size: 18px; }
 
 .app-header h1 small { font-size: 13px; color: #fff3a8; }
 .remember-correction, .learning-master-switch { display: inline-flex; align-items: center; gap: 8px; font-weight: 800; }
@@ -1048,6 +1067,8 @@ label {
   .settlement-note-field { grid-column: auto; }
   .settlement-compact-formula { display: grid; gap: 5px; font-size: 13px; }
   .settlement-compact-formula strong { font-size: 14px; }
+  .settlement-batch-table th, .settlement-batch-table td { padding: 6px; }
+  .settlement-ledger-summary > div { grid-template-columns: 84px 1fr; }
 }
 
 .parsed-mobile-controls {
