@@ -244,14 +244,14 @@ textarea:focus {
   outline: none;
 }
 
-.settlement-source-items { display: grid; gap: 12px; margin: 14px 0; }
-.settlement-source-item { border: 1px solid #d8e0ea; border-radius: 12px; padding: 12px; background: #fff; }
+.settlement-source-items { display: grid; gap: 7px; margin: 0; }
+.settlement-source-item { border: 1px solid #d8e0ea; border-radius: 10px; padding: 9px 10px; background: #fff; }
 .settlement-source-heading { display: flex; gap: 8px; align-items: flex-start; flex-wrap: wrap; }
 .settlement-source-heading > span { flex: 1 1 220px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .settlement-source-heading em { color: #a45b00; font-style: normal; font-size: .85em; }
-.settlement-source-totals { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
-.settlement-source-totals span { padding: 8px; border-radius: 8px; background: #f5f8fc; }
-@media (max-width: 680px) { .settlement-source-totals { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.settlement-compact-formula { display: flex; align-items: baseline; justify-content: space-between; gap: 8px 14px; flex-wrap: wrap; margin-top: 6px; padding: 7px 9px; border-radius: 8px; background: #f6f8fb; }
+.settlement-amount-parts { color: #334155; overflow-wrap: anywhere; }
+.settlement-compact-formula strong { color: #0f172a; }
 
 .app-header h1 small { font-size: 13px; color: #fff3a8; }
 .remember-correction, .learning-master-switch { display: inline-flex; align-items: center; gap: 8px; font-weight: 800; }
@@ -956,8 +956,8 @@ label {
 
 .customer-settlement-body {
   display: grid;
-  gap: 12px;
-  padding: 14px 16px 16px;
+  gap: 9px;
+  padding: 10px 12px 12px;
 }
 
 .customer-settlement-metrics {
@@ -1005,6 +1005,7 @@ label {
   border: 1px solid var(--line);
   border-radius: 10px;
   background: #fff;
+  margin-top: 7px;
 }
 
 .settlement-manual-editor > summary,
@@ -1043,6 +1044,8 @@ label {
   .settlement-direction { font-size: 19px; }
   .settlement-manual-grid { grid-template-columns: 1fr; }
   .settlement-note-field { grid-column: auto; }
+  .settlement-compact-formula { display: grid; gap: 5px; font-size: 13px; }
+  .settlement-compact-formula strong { font-size: 14px; }
 }
 
 .parsed-mobile-controls {
