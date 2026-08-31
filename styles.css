@@ -249,9 +249,11 @@ textarea:focus {
 .settlement-source-heading { display: flex; gap: 8px; align-items: flex-start; flex-wrap: wrap; }
 .settlement-source-heading > span { flex: 1 1 220px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .settlement-source-heading em { color: #a45b00; font-style: normal; font-size: .85em; }
-.settlement-compact-formula { display: flex; align-items: baseline; justify-content: space-between; gap: 8px 14px; flex-wrap: wrap; margin-top: 6px; padding: 7px 9px; border-radius: 8px; background: #f6f8fb; }
+.settlement-compact-formula { display: grid; gap: 5px; margin-top: 6px; padding: 9px 10px; border-radius: 8px; background: #f6f8fb; }
 .settlement-amount-parts { color: #334155; overflow-wrap: anywhere; }
 .settlement-compact-formula strong { color: #0f172a; }
+.settlement-batch-meta { color: var(--muted); font-size: 13px; }
+.settlement-winning-summary { color: #b42318; font-size: 13px; font-weight: 700; }
 
 .app-header h1 small { font-size: 13px; color: #fff3a8; }
 .remember-correction, .learning-master-switch { display: inline-flex; align-items: center; gap: 8px; font-weight: 800; }

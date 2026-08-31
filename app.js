@@ -3597,6 +3597,20 @@ function settlementAmountFormula(orders) {
   return orders.map((order) => `${money(order.total)}${settlementWinningLabel(order)}`).join(" + ");
 }
 
+function settlementBatchId(order) {
+  const savedAt = order.sourceSavedAt || order.createdAt || "";
+  return order.sourceBatchId || (savedAt ? `saved_${savedAt}` : `legacy_${order.id}`);
+}
+
+function settlementTimeLabel(value) {
+  const time = Date.parse(String(value || ""));
+  return Number.isFinite(time) ? new Date(time).toLocaleString() : "时间未记录";
+}
+
+function settlementWinningSummary(orders) {
+  return orders.map(settlementWinningLabel).filter(Boolean).join("；");
+}
+
 function settlementPayableText(total, rebate, win) {
   const payable = Number(total || 0) - Number(rebate || 0) - Number(win || 0);
   if (payable > 0) return `客户应付 ${money(payable)}`;
@@ -3609,23 +3623,21 @@ function renderCustomerSettlement() {
   const customersMap = new Map();
   orders.forEach((order) => {
     const name = order.customerName || "散客";
-    if (!customersMap.has(name)) customersMap.set(name, { name, sourceItems: new Map() });
+    if (!customersMap.has(name)) customersMap.set(name, { name, batches: new Map() });
     const customer = customersMap.get(name);
-    const sourceId = order.sourceItemId || `legacy_${order.id}`;
-    if (!customer.sourceItems.has(sourceId)) {
-      customer.sourceItems.set(sourceId, {
-        id: sourceId,
-        index: Number(order.sourceItemIndex || 0),
-        text: order.sourceItemText || order.raw || `${order.region || ""} ${order.type || ""} ${(order.targets || []).join(" ")}`.trim(),
+    const batchId = settlementBatchId(order);
+    if (!customer.batches.has(batchId)) {
+      customer.batches.set(batchId, {
+        id: batchId,
         savedAt: order.sourceSavedAt || order.createdAt || "",
         orders: []
       });
     }
-    customer.sourceItems.get(sourceId).orders.push(order);
+    customer.batches.get(batchId).orders.push(order);
   });
   const rows = [...customersMap.values()].map((customer) => {
-    customer.items = [...customer.sourceItems.values()]
-      .sort((a, b) => settlementTimeValue(a.savedAt) - settlementTimeValue(b.savedAt) || a.index - b.index)
+    customer.items = [...customer.batches.values()]
+      .sort((a, b) => settlementTimeValue(a.savedAt) - settlementTimeValue(b.savedAt))
       .map((item, displayIndex) => {
         item.orders.sort((a, b) => settlementTimeValue(a.createdAt) - settlementTimeValue(b.createdAt));
         const baseTotal = item.orders.reduce((sum, order) => sum + Number(order.total || 0), 0);
@@ -3650,7 +3662,7 @@ function renderCustomerSettlement() {
     return `
       <details class="customer-settlement-sheet" open>
         <summary>
-          <span><b>${htmlEscape(customer.name)}</b><small>${customer.items.length} 个原始项目</small></span>
+          <span><b>${htmlEscape(customer.name)}</b><small>${customer.items.length} 次整体输入</small></span>
           <strong class="${customer.net > 0 ? "settlement-pay-customer" : customer.net < 0 ? "settlement-customer-pay" : "ok"}">${resultText}</strong>
         </summary>
         <div class="customer-settlement-body">
@@ -3658,15 +3670,15 @@ function renderCustomerSettlement() {
             ${customer.items.map((item) => {
               const changed = ["total", "win", "rebate"].some((field) => item.manual[field] !== undefined && item.manual[field] !== null && item.manual[field] !== "");
               return `<article class="settlement-source-item">
-                <div class="settlement-source-heading"><b>${item.displayIndex}.</b><span>${htmlEscape(item.text)}</span>${changed ? "<em>已人工修正</em>" : ""}</div>
-                <div class="settlement-compact-formula"><span class="settlement-amount-parts">${settlementAmountFormula(item.orders)}</span><strong>= 总金额 ${money(item.total)} − 返水 ${money(item.rebate)} − 中奖 ${money(item.win)} = ${settlementPayableText(item.total, item.rebate, item.win)}</strong></div>
+                <div class="settlement-source-heading"><b>第${item.displayIndex}次输入</b><span class="settlement-batch-meta">${settlementTimeLabel(item.savedAt)} · ${item.orders.length} 个项目</span>${changed ? "<em>已人工修正</em>" : ""}</div>
+                <div class="settlement-compact-formula"><strong>本次总金额 ${money(item.total)} − 返水 ${money(item.rebate)} − 中奖 ${money(item.win)} = ${settlementPayableText(item.total, item.rebate, item.win)}</strong>${settlementWinningSummary(item.orders) ? `<span class="settlement-winning-summary">${settlementWinningSummary(item.orders)}</span>` : ""}</div>
                 <details class="settlement-manual-editor"><summary>修正金额</summary><div class="settlement-manual-grid">
                   <label>实际投注<input type="number" step="0.01" data-source-item="${htmlEscape(item.id)}" data-settlement-field="total" value="${item.manual.total ?? ""}" placeholder="自动 ${money(item.baseTotal)}" /></label>
                   <label>实际中奖<input type="number" step="0.01" data-source-item="${htmlEscape(item.id)}" data-settlement-field="win" value="${item.manual.win ?? ""}" placeholder="自动 ${money(item.baseWin)}" /></label>
                   <label>实际返水<input type="number" step="0.01" data-source-item="${htmlEscape(item.id)}" data-settlement-field="rebate" value="${item.manual.rebate ?? ""}" placeholder="自动 ${money(item.baseRebate)}" /></label>
                   <label class="settlement-note-field">备注<input type="text" data-source-item="${htmlEscape(item.id)}" data-settlement-field="note" value="${htmlEscape(item.manual.note || "")}" /></label>
                 </div><button type="button" class="plain" data-settlement-reset="${htmlEscape(item.id)}">恢复自动计算</button></details>
-                <details class="settlement-order-details"><summary>解析明细（${item.orders.length}）</summary><div class="settlement-orders">${item.orders.map((order, index) => `<div class="settlement-order-row ${Number(order.winAmount || 0) > 0 ? "winner" : ""}"><b>${index + 1}. ${htmlEscape(order.region)} ${htmlEscape(order.type)} ${htmlEscape((order.targets || []).join(" "))}</b><span>投注 ${money(order.total)} · 中奖 ${money(order.winAmount || 0)} · 返水 ${money(order.rebateAmount ?? rebateAmountFor(order.total, order.rebate))}</span></div>`).join("")}</div></details>
+                <details class="settlement-order-details"><summary>查看本次输入明细（${item.orders.length}）</summary><div class="settlement-orders">${item.orders.map((order, index) => `<div class="settlement-order-row ${Number(order.winAmount || 0) > 0 ? "winner" : ""}"><b>${index + 1}. ${htmlEscape(order.region)} ${htmlEscape(order.type)} ${htmlEscape((order.targets || []).join(" "))}</b><span>投注 ${money(order.total)} · 中奖 ${money(order.winAmount || 0)} · 返水 ${money(order.rebateAmount ?? rebateAmountFor(order.total, order.rebate))}</span></div>`).join("")}</div></details>
                 ${item.manual.note ? `<div class="settlement-note">备注：${htmlEscape(item.manual.note)}</div>` : ""}
               </article>`;
             }).join("")}
@@ -3717,8 +3729,8 @@ async function copyCustomerSettlement(name) {
   const customerOrders = orders.filter((order) => (order.customerName || "散客") === name);
   const groups = new Map();
   customerOrders.forEach((order) => {
-    const id = order.sourceItemId || `legacy_${order.id}`;
-    if (!groups.has(id)) groups.set(id, { id, text: order.sourceItemText || order.raw || "原始项目", savedAt: order.sourceSavedAt || order.createdAt || "", orders: [] });
+    const id = settlementBatchId(order);
+    if (!groups.has(id)) groups.set(id, { id, savedAt: order.sourceSavedAt || order.createdAt || "", orders: [] });
     groups.get(id).orders.push(order);
   });
   const items = [...groups.values()].sort((a, b) => settlementTimeValue(a.savedAt) - settlementTimeValue(b.savedAt)).map((item, index) => {
@@ -3730,7 +3742,7 @@ async function copyCustomerSettlement(name) {
     const total = settlementManualNumber(manual.total, baseTotal);
     const win = settlementManualNumber(manual.win, baseWin);
     const rebate = settlementManualNumber(manual.rebate, baseRebate);
-    return { ...item, index: index + 1, total, win, rebate, net: win + rebate - total, note: manual.note || "", amountFormula: settlementAmountFormula(item.orders) };
+    return { ...item, index: index + 1, total, win, rebate, net: win + rebate - total, note: manual.note || "", winningSummary: settlementWinningSummary(item.orders) };
   });
   const total = items.reduce((sum, item) => sum + item.total, 0);
   const win = items.reduce((sum, item) => sum + item.win, 0);
@@ -3739,7 +3751,7 @@ async function copyCustomerSettlement(name) {
   const result = net > 0 ? `应付客户 ${money(net)}` : net < 0 ? `客户应付 ${money(Math.abs(net))}` : "本期已结清";
   const text = [
     `客户：${name}`,
-    ...items.flatMap((item) => [`${item.index}. ${item.text}`, `${item.amountFormula} = 总金额 ${money(item.total)} - 返水 ${money(item.rebate)} - 中奖 ${money(item.win)} = ${settlementPayableText(item.total, item.rebate, item.win)}`, item.note ? `备注：${item.note}` : ""]).filter(Boolean),
+    ...items.flatMap((item) => [`第${item.index}次输入（${settlementTimeLabel(item.savedAt)}，${item.orders.length}个项目）`, `本次总金额 ${money(item.total)} - 返水 ${money(item.rebate)} - 中奖 ${money(item.win)} = ${settlementPayableText(item.total, item.rebate, item.win)}`, item.winningSummary ? `中奖明细：${item.winningSummary}` : "", item.note ? `备注：${item.note}` : ""]).filter(Boolean),
     "——客户合计——",
     `投注总额：${money(total)}`,
     `中奖合计：${money(win)}`,
