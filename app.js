@@ -92,7 +92,7 @@ const oddsSettingKeys = [
   "五不中", "六不中", "七不中", "八不中", "九不中", "十不中"
 ];
 const deferredKeywords = [];
-const eachAmountKeywords = "各数|每数|个数|各肖|每肖|各尾|每尾|各|每";
+const eachAmountKeywords = "各号|每号|各数|每数|个数|各肖|每肖|各尾|每尾|各|每";
 const groupedPlayTypes = new Set([
   "连肖", "二连肖", "三连肖", "四连肖", "五连肖", "二连尾", "三连尾", "四连尾", "五连尾",
   "五不中", "六不中", "七不中", "八不中", "九不中", "十不中",
@@ -757,6 +757,9 @@ function normalizeText(text) {
   return String(text || "")
     .replace(/免/g, "兔")
     .replace(/两连/g, "二连")
+    .replace(/各\s*号/g, "各数")
+    .replace(/每\s*号/g, "每数")
+    .replace(/(?<![大小])号\s*(?=(?:\d+(?:\.\d+)?|[一二两三四五六七八九十百]+)(?:\s*(?:元|米|块|斤))?(?:\s|$|[,，;；]))/g, "各")
     .replace(/([=＝/／?？]\s*)([零一二两三四五六七八九十百千]+)/g, (_, separator, amount) => `${separator}${chineseAmountToNumber(amount) ?? amount}`)
     .replace(/[，、；;·]/g, " ")
     .replace(/[：:]/g, " ")
@@ -1914,6 +1917,9 @@ function normalizeLearningText(value) {
   return String(value || "")
     .replace(/[Ⅹⅹ×＊*]/g, "x")
     .normalize("NFKC")
+    .replace(/各\s*号/g, "各数")
+    .replace(/每\s*号/g, "每数")
+    .replace(/(?<![大小])号\s*(?=(?:\d+(?:\.\d+)?|[一二两三四五六七八九十百]+)(?:\s*(?:元|米|块|斤))?(?:\s|$|[,，;；]))/g, "各")
     .replace(/香港/g, "港")
     .replace(/澳门/g, "澳")
     .replace(/[，、；;]+/g, " ")

@@ -1,4 +1,4 @@
-const CACHE_NAME = "fortune-current-pwa-20260901-v16-share-settlement";
+const CACHE_NAME = "fortune-current-pwa-20260901-v17-hao-parser";
 const APP_SHELL = [
   "./", "./index.html", "./styles.css", "./config.js", "./app.js", "./pwa.js",
   "./manifest.json", "./offline.html", "./icons/icon-192.png", "./icons/icon-512.png",
