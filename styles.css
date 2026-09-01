@@ -273,6 +273,8 @@ textarea:focus {
 .settlement-ledger-summary span { font-weight: 700; text-align: right; }
 .settlement-ledger-summary b { color: #b42318; }
 .settlement-ledger-result { margin-top: 4px; padding-top: 7px; border-top: 2px solid #0f172a; font-size: 18px; }
+.settlement-share-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.settlement-share-actions button { width: auto; flex: 1 1 180px; }
 
 .app-header h1 small { font-size: 13px; color: #fff3a8; }
 .remember-correction, .learning-master-switch { display: inline-flex; align-items: center; gap: 8px; font-weight: 800; }

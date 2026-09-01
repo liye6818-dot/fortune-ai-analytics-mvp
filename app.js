@@ -3690,7 +3690,7 @@ function renderCustomerSettlement() {
     return customer;
   }).sort((a, b) => a.firstSavedAt - b.firstSavedAt || a.name.localeCompare(b.name, "zh-CN"));
   const root = $("customerSettlementRows");
-  root.innerHTML = rows.length ? rows.map((customer) => {
+  root.innerHTML = rows.length ? rows.map((customer, customerIndex) => {
     const resultText = customer.net > 0 ? `应付客户 ${money(customer.net)}` : customer.net < 0 ? `客户应付 ${money(Math.abs(customer.net))}` : "本期已结清";
     const payoutGroups = settlementPayoutGroups(customer.items);
     const automaticWin = payoutGroups.reduce((sum, group) => sum + group.payout, 0);
@@ -3698,12 +3698,12 @@ function renderCustomerSettlement() {
     return `
       <details class="customer-settlement-sheet" open>
         <summary>
-          <span><b>${htmlEscape(customer.name)}</b><small>${customer.items.length} 次整体输入</small></span>
+          <span><b>结算表${rows.length > 1 ? ` ${customerIndex + 1}` : ""}</b><small>${customer.items.length} 次整体输入</small></span>
           <strong class="${customer.net > 0 ? "settlement-pay-customer" : customer.net < 0 ? "settlement-customer-pay" : "ok"}">${resultText}</strong>
         </summary>
         <div class="customer-settlement-body">
           <div class="settlement-batch-table-wrap"><table class="settlement-batch-table">
-            <thead><tr><th>序号</th><th>金额</th><th>中特</th><th>平特 / 连肖</th><th>编辑</th></tr></thead>
+            <thead><tr><th>序号</th><th>金额</th><th>中特</th><th>其他中奖</th><th>编辑</th></tr></thead>
             <tbody>${customer.items.map((item) => {
               const changed = ["total", "win", "rebate"].some((field) => item.manual[field] !== undefined && item.manual[field] !== null && item.manual[field] !== "");
               return `<tr class="${changed ? "settlement-row-changed" : ""}">
@@ -3724,7 +3724,7 @@ function renderCustomerSettlement() {
             ${Math.abs(winAdjustment) > 0.001 ? `<div><span>中奖调整</span><b>${money(winAdjustment)}</b></div>` : ""}
             <div class="settlement-ledger-result"><span>最终结算</span><b>${settlementPayableText(customer.total, customer.rebate, customer.win)}</b></div>
           </div>
-          <button type="button" data-copy-settlement="${htmlEscape(customer.name)}">复制本客户对账单</button>
+          <div class="settlement-share-actions"><button type="button" data-share-settlement="${htmlEscape(customer.name)}">分享 / 保存对账图片</button><button class="plain" type="button" data-copy-settlement="${htmlEscape(customer.name)}">复制文字</button></div>
         </div>
       </details>
     `;
@@ -3737,6 +3737,9 @@ function renderCustomerSettlement() {
   });
   root.querySelectorAll("[data-copy-settlement]").forEach((button) => {
     button.addEventListener("click", () => copyCustomerSettlement(button.dataset.copySettlement));
+  });
+  root.querySelectorAll("[data-share-settlement]").forEach((button) => {
+    button.addEventListener("click", () => shareCustomerSettlementImage(button.dataset.shareSettlement));
   });
 }
 
@@ -3765,7 +3768,7 @@ function resetSourceItemSettlementManual(sourceItemId) {
   renderCustomerSettlement();
 }
 
-async function copyCustomerSettlement(name) {
+function customerSettlementExportData(name) {
   const customerOrders = orders.filter((order) => (order.customerName || "散客") === name);
   const groups = new Map();
   customerOrders.forEach((order) => {
@@ -3782,28 +3785,117 @@ async function copyCustomerSettlement(name) {
     const total = settlementManualNumber(manual.total, baseTotal);
     const win = settlementManualNumber(manual.win, baseWin);
     const rebate = settlementManualNumber(manual.rebate, baseRebate);
-    return { ...item, index: index + 1, total, win, rebate, net: win + rebate - total, note: manual.note || "", winningSummary: settlementWinningSummary(item.orders) };
+    return { ...item, index: index + 1, total, win, rebate, net: win + rebate - total, note: manual.note || "", winningSummary: settlementWinningSummary(item.orders), winColumns: settlementBatchWinColumns(item.orders) };
   });
   const total = items.reduce((sum, item) => sum + item.total, 0);
   const win = items.reduce((sum, item) => sum + item.win, 0);
   const rebate = items.reduce((sum, item) => sum + item.rebate, 0);
-  const net = win + rebate - total;
-  const result = net > 0 ? `应付客户 ${money(net)}` : net < 0 ? `客户应付 ${money(Math.abs(net))}` : "本期已结清";
+  return { items, total, win, rebate, payoutGroups: settlementPayoutGroups(items) };
+}
+
+async function copyCustomerSettlement(name) {
+  const { items, total, win, rebate } = customerSettlementExportData(name);
   const text = [
-    `客户：${name}`,
     ...items.flatMap((item) => [`${item.index}. 金额 ${money(item.total)}`, `返水 ${money(item.rebate)}，中奖 ${money(item.win)}，${settlementPayableText(item.total, item.rebate, item.win)}`, item.winningSummary ? `中奖明细：${item.winningSummary}` : "", item.note ? `备注：${item.note}` : ""]).filter(Boolean),
     "——客户合计——",
     `投注总额：${money(total)}`,
     `中奖合计：${money(win)}`,
     `返水：${money(rebate)}`,
     `计算：总投注 ${money(total)} - 返水 ${money(rebate)} - 中奖 ${money(win)} = ${settlementPayableText(total, rebate, win)}`,
-    `结果：${result}`
+    `结果：${settlementPayableText(total, rebate, win)}`
   ].filter(Boolean).join("\n");
   try {
     await navigator.clipboard.writeText(text);
     alert("客户对账单已复制");
   } catch {
     alert(text);
+  }
+}
+
+function settlementImageBlob(data) {
+  const columns = data.items.length > 30 ? 2 : 1;
+  const rowsPerColumn = Math.max(1, Math.ceil(data.items.length / columns));
+  const width = 1200;
+  const margin = 36;
+  const gap = 18;
+  const rowHeight = 46;
+  const headerHeight = 48;
+  const summaryLines = 3 + data.payoutGroups.length;
+  const tableHeight = headerHeight + rowsPerColumn * rowHeight;
+  const height = margin * 2 + tableHeight + summaryLines * 44 + 24;
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, width, height);
+  ctx.strokeStyle = "#111827";
+  ctx.lineWidth = 1;
+  ctx.textBaseline = "middle";
+  const tableWidth = (width - margin * 2 - gap * (columns - 1)) / columns;
+  const ratios = [0.12, 0.25, 0.20, 0.43];
+  const headers = ["序号", "金额", "中特", "其他中奖"];
+  const drawCell = (x, y, w, h, value, bold = false, color = "#111827") => {
+    ctx.strokeRect(x, y, w, h);
+    ctx.fillStyle = color;
+    ctx.font = `${bold ? "700" : "400"} 21px "Microsoft YaHei", Arial, sans-serif`;
+    ctx.textAlign = "center";
+    ctx.fillText(String(value || ""), x + w / 2, y + h / 2, Math.max(0, w - 12));
+  };
+  for (let column = 0; column < columns; column += 1) {
+    const x0 = margin + column * (tableWidth + gap);
+    let x = x0;
+    headers.forEach((header, index) => {
+      const cellWidth = tableWidth * ratios[index];
+      drawCell(x, margin, cellWidth, headerHeight, header, true);
+      x += cellWidth;
+    });
+    for (let row = 0; row < rowsPerColumn; row += 1) {
+      const item = data.items[column * rowsPerColumn + row];
+      const values = item ? [item.index, money(item.total), item.winColumns.special ? money(item.winColumns.special) : "", item.winColumns.others] : ["", "", "", ""];
+      x = x0;
+      values.forEach((value, index) => {
+        const cellWidth = tableWidth * ratios[index];
+        drawCell(x, margin + headerHeight + row * rowHeight, cellWidth, rowHeight, value, index === 1, index >= 2 && value ? "#b42318" : "#111827");
+        x += cellWidth;
+      });
+    }
+  }
+  let y = margin + tableHeight + 24;
+  const drawSummary = (label, value, strong = false) => {
+    ctx.textAlign = "right";
+    ctx.fillStyle = "#111827";
+    ctx.font = `${strong ? "700" : "600"} 25px "Microsoft YaHei", Arial, sans-serif`;
+    ctx.fillText(label, 290, y);
+    ctx.textAlign = "left";
+    ctx.fillStyle = strong ? "#b42318" : "#111827";
+    ctx.font = `${strong ? "700" : "600"} 25px "Microsoft YaHei", Arial, sans-serif`;
+    ctx.fillText(value, 320, y);
+    y += 44;
+  };
+  drawSummary("总金额", money(data.total), true);
+  drawSummary("返水", money(data.rebate));
+  data.payoutGroups.forEach((group) => drawSummary(group.label, `${money(group.stake)} × ${money(group.odds)} = ${money(group.payout)}`));
+  drawSummary("最终结算", settlementPayableText(data.total, data.rebate, data.win), true);
+  return new Promise((resolve, reject) => canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error("图片生成失败")), "image/png"));
+}
+
+async function shareCustomerSettlementImage(name) {
+  try {
+    const blob = await settlementImageBlob(customerSettlementExportData(name));
+    const file = new File([blob], "结算单.png", { type: "image/png" });
+    if (navigator.share && (!navigator.canShare || navigator.canShare({ files: [file] }))) {
+      await navigator.share({ title: "结算单", files: [file] });
+      return;
+    }
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "结算单.png";
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  } catch (error) {
+    if (error?.name !== "AbortError") alert(error?.message || "对账图片生成失败");
   }
 }
 
