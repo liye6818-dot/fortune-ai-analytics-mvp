@@ -3249,6 +3249,10 @@ function winningUnits(order, drawNums) {
     const winningZodiacs = new Set(drawNums.map(numberMeta).map((meta) => meta.zodiac));
     return new Set((order.targets || []).filter((target) => winningZodiacs.has(target))).size;
   }
+  if (order.type === "平尾") {
+    const winningTails = new Set(drawNums.map((number) => String(Number(number) % 10)));
+    return new Set(targetTails(order).filter((tail) => winningTails.has(tail))).size;
+  }
   return isWinner(order, drawNums) ? 1 : 0;
 }
 
